@@ -53,7 +53,7 @@ unshift( @typemaps, "typemap.561") if $] < 5.008;
 # Write the makefile....
 WriteMakefile(
     'NAME'      => 'Starlink::AST',
-    'VERSION_FROM' => 'AST.pm', # finds $VERSION
+    'VERSION'   => '0.02',
     'LIBS'      => [ $libs ],   # e.g., '-lm' 
     'INC'       => "-I$StarConfig{Star_Inc}", # e.g., '-I/usr/include/other' 
     'TYPEMAPS'  => \@typemaps,
@@ -63,6 +63,6 @@ WriteMakefile(
                     'ZIP'=>'/usr/bin/zip','ZIPFLAGS'=>'-rl'},
   ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
      (ABSTRACT_FROM => 'AST.pm',
-      AUTHOR     => 'Tim Jenness <t.jenness@jach.hawaii.edu>') : ()),
+      AUTHOR     => 'Tim Jenness <tjenness@cpan.org>') : ()),
 );
 
