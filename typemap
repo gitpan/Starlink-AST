@@ -22,6 +22,7 @@ AstSkyFrame *	T_ASTOBJ
 AstSlaMap *	T_ASTOBJ
 AstSphMap *	T_ASTOBJ
 AstSpecFrame *	T_ASTOBJ
+AstDSBSpecFrame *	T_ASTOBJ
 AstSpecMap *	T_ASTOBJ
 AstTranMap *	T_ASTOBJ
 AstUnitMap *	T_ASTOBJ
@@ -31,7 +32,14 @@ AstXmlChan *	T_ASTOBJ
 AstZoomMap *	T_ASTOBJ
 StatusType      T_STATUSINT
 WcsMapType      T_WCSMAPINT
-
+AstKeyMap *	T_ASTOBJ
+AstRegion *	T_ASTOBJ
+AstEllipse *	T_ASTOBJ
+AstBox *	T_ASTOBJ
+AstCircle *	T_ASTOBJ
+AstRateMap *	T_ASTOBJ
+AstFluxFrame *	T_ASTOBJ
+AstSpecFluxFrame *	T_ASTOBJ
 
 INPUT
 

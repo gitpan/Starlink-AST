@@ -9,7 +9,7 @@ use PGPLOT;
 use Starlink::AST;
 use Carp;
 
-'$Revision: 1.18 $ ' =~ /.*:\s(.*)\s\$/ && ($VERSION = $1);
+'$Revision: 1.19 $ ' =~ /.*:\s(.*)\s\$/ && ($VERSION = $1);
 
 =head1 NAME
 
@@ -48,7 +48,7 @@ of the packages public interface.
 
 =head1 REVISION
 
-$Id: PGPLOT.pm,v 1.18 2004/04/22 02:17:57 timj Exp $
+$Id: PGPLOT.pm,v 1.19 2004/09/08 03:39:44 timj Exp $
 
 =head1 METHODS
 
@@ -149,7 +149,7 @@ sub _GText {
       if ( defined $just && length($just) == 2 ) {
          
         # if we have a bogus justification string default it 
-        unless( $just1 =~ /[TBC]/ ) {
+        unless( $just1 =~ /^[TBC]/ ) {
            warn "_GText: bad vertical justification defaulting to 'C'\n";
            $just1 = "C";
         }

@@ -83,9 +83,45 @@ typedef void AstXmlChan;
 
 #if ( (AST_MAJOR_VERS == 3 && AST_MINOR_VERS >= 2) || AST_MAJOR_VERS >= 4 )
 #define HASTRANMAP
+#define HASPUTCARDS
+#define HASESCAPES
 #else
 typedef void AstTranMap;
 #endif
+
+#if ( (AST_MAJOR_VERS == 3 && AST_MINOR_VERS >= 4) || AST_MAJOR_VERS >= 4 )
+#define HASDSBSPECFRAME
+#define HASLINEARAPPROX
+#else
+typedef void AstDSBSpecFrame;
+#endif
+
+#if ( (AST_MAJOR_VERS == 3 && AST_MINOR_VERS >= 5) || AST_MAJOR_VERS >= 4 )
+#define HASSETFITS
+#define HASRATEMAP
+#define HASKEYMAP
+#define HASFLUXFRAME
+#define HASSPECFLUXFRAME
+#define HASREGION
+#else
+typedef void AstRateMap;
+typedef void AstKeyMap;
+typedef void AstFluxFrame;
+typedef void AstSpecFluxFrame;
+typedef void AstRegion;
+typedef void AstBox;
+typedef void AstCircle;
+typedef void AstEllipse;
+#endif
+
+/* between v3.0 and v3.4 astRate returned the second derivative */
+#if ( AST_MAJOR_VERS == 3 && AST_MINOR_VERS < 5 )
+#define RATE_HAS_SECOND_DERIVATIVE 1
+#endif
+
+
+
+
 
 /* Helper functions */
 #include "arrays.h"
@@ -109,6 +145,34 @@ char ** pack1Dchar( AV * avref ) {
       /* undef */
     } else {
       outarr[i] = SvPV( *elem, linelen);
+    }
+  }
+  return outarr;
+}
+
+AstObject ** pack1DAstObj( AV * avref ) {
+  int i;
+  SV ** elem;
+  AstObject ** outarr;
+  int len;
+
+  /* number of elements */
+  len  = av_len( avref ) + 1;
+  /* Temporary storage - array of pointers */
+  outarr = get_mortalspace( len,'v');
+
+  for (i=0; i<len; i++) {
+    elem = av_fetch( avref, i, 0);
+    if (elem == NULL ) {
+      /* undef */
+    } else {
+      /* Now need to convert this SV** to an AstObject */
+      if (sv_derived_from(*elem, "Starlink::AST")) {
+	    IV tmpiv = extractAstIntPointer( *elem );
+	    outarr[i] = INT2PTR(AstObject *,tmpiv);
+      } else {
+        Perl_croak( aTHX_ "Array contains non-Starlink::AST variables");
+      }
     }
   }
   return outarr;
@@ -325,12 +389,41 @@ void My_astCopyErrMsg ( AV ** newbuff ) {
 
 }
 
+/* Since you can not put CPP code within CPP code inside XS we need
+   to provide a special wrapper routine for astRate */
+void myAstRate ( AstMapping * this, double * cat, int ax1, int ax2, 
+		 double * d2) {
+  double RETVAL;
+  dXSARGS;
+
+#if RATE_HAS_SECOND_DERIVATIVE
+  ASTCALL(
+    RETVAL = astRate( this, cat, ax1, ax2, d2 );
+  )
+#else
+  ASTCALL(
+    RETVAL = astRate( this, cat, ax1, ax2 );
+  )
+#endif
+  if ( RETVAL != AST__BAD ) {
+     XPUSHs(sv_2mortal(newSVnv(RETVAL)));
+#ifdef RATE_HAS_SECOND_DERIVATIVE
+     XPUSHs(sv_2mortal(newSVnv(*d2)));
+#endif
+  } else {
+     XSRETURN_EMPTY;
+  }
+}
+
+
 MODULE = Starlink::AST     PACKAGE = Starlink::AST
+
+PROTOTYPES: DISABLE
 
 BOOT:
           MUTEX_INIT(&AST_mutex);
           ErrBuff = newAV();
-          
+
 double
 AST__BAD()
  CODE:
@@ -341,7 +434,7 @@ AST__BAD()
 #endif
  OUTPUT:
   RETVAL
-          
+
 MODULE = Starlink::AST     PACKAGE = Starlink::AST PREFIX = ast
 
 
@@ -359,6 +452,18 @@ astEnd()
   ASTCALL(
     astEnd;
   )
+
+bool
+astEscapes( new_value )
+  bool new_value
+ CODE:
+#ifndef HASESCAPES
+   Perl_croak(aTHX_ "astEscapes: Please upgrade to AST V3.2 or greater");
+#else
+  RETVAL = astEscapes( new_value );
+#endif
+ OUTPUT:
+  RETVAL
 
 # Can be called as class method or function
 
@@ -479,6 +584,44 @@ new( class, frame1, frame2, options )
   ASTCALL(
    RETVAL = astCmpFrame( frame1, frame2, options );
   )
+ OUTPUT:
+  RETVAL
+
+MODULE = Starlink::AST  PACKAGE = Starlink::AST::FluxFrame
+
+AstFluxFrame *
+new( class, specval, specfrm, options )
+  char * class
+  double specval
+  AstSpecFrame * specfrm
+  char * options
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astFluxFrame: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   RETVAL = astFluxFrame( specval, specfrm, options );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+MODULE = Starlink::AST  PACKAGE = Starlink::AST::SpecFluxFrame
+
+AstSpecFluxFrame *
+new( class, frame1, frame2, options )
+  char * class
+  AstSpecFrame * frame1
+  AstFluxFrame * frame2
+  char * options
+ CODE:
+#ifndef HASSPECFLUXFRAME
+  Perl_croak(aTHX_ "astSpecFluxFrame: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   RETVAL = astSpecFluxFrame( frame1, frame2, options );
+  )
+#endif
  OUTPUT:
   RETVAL
 
@@ -861,6 +1004,23 @@ new( class, options )
  OUTPUT:
   RETVAL
 
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::DSBSpecFrame
+
+AstDSBSpecFrame *
+new( class, options )
+  char * class
+  char * options
+ CODE:
+#ifndef HASDSBSPECFRAME
+   Perl_croak(aTHX_ "DSBSpecFrame: Please upgrade to AST V3.4 or greater");
+#else
+  ASTCALL(
+   RETVAL = astDSBSpecFrame( options );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
 
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::SlaMap
 
@@ -1231,6 +1391,549 @@ astDESTROY( obj )
     }
   }
 
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::KeyMap PREFIX = ast
+
+AstKeyMap *
+new( class, options )
+  char * class
+  char * options
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "AstKeyMap: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   RETVAL = astKeyMap( options );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__BADTYPE()
+ CODE:
+#ifdef AST__BADTYPE
+    RETVAL = AST__BADTYPE;
+#else
+    Perl_croak(aTHX_ "Constant AST__BADTYPE not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__INTTYPE()
+ CODE:
+#ifdef AST__INTTYPE
+    RETVAL = AST__INTTYPE;
+#else
+    Perl_croak(aTHX_ "Constant AST__INTTYPE not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__DOUBLETYPE()
+ CODE:
+#ifdef AST__DOUBLETYPE
+    RETVAL = AST__DOUBLETYPE;
+#else
+    Perl_croak(aTHX_ "Constant AST__DOUBLETYPE not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__STRINGTYPE()
+ CODE:
+#ifdef AST__STRINGTYPE
+    RETVAL = AST__STRINGTYPE;
+#else
+    Perl_croak(aTHX_ "Constant AST__STRINGTYPE not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__OBJECTTYPE()
+ CODE:
+#ifdef AST__OBJECTTYPE
+    RETVAL = AST__OBJECTTYPE;
+#else
+    Perl_croak(aTHX_ "Constant AST__OBJECTTYPE not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+
+
+void
+astMapPut0D( this, key, value, comment)
+  AstKeyMap * this
+  char * key
+  double value
+  char * comment
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapPut0D: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   astMapPut0D( this, key, value, comment);
+  )
+#endif
+
+void
+astMapPut0I( this, key, value, comment)
+  AstKeyMap * this
+  char * key
+  int value
+  char * comment
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapPut0I: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   astMapPut0I( this, key, value, comment);
+  )
+#endif
+
+void
+astMapPut0C( this, key, value, comment)
+  AstKeyMap * this
+  char * key
+  char * value
+  char * comment
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapPut0C: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   astMapPut0C( this, key, value, comment);
+  )
+#endif
+
+void
+astMapPut0A( this, key, value, comment)
+  AstKeyMap * this
+  char * key
+  AstObject * value
+  char * comment
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapPut0A: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   astMapPut0A( this, key, value, comment);
+  )
+#endif
+
+void
+astMapPut1D( this, key, values, comment)
+  AstKeyMap * this
+  char * key
+  AV * values
+  char * comment
+ PREINIT:
+  int size;
+  double * val;
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapPut1D: Please upgrade to AST V3.5 or newer");
+#else
+  size = av_len(values) + 1;
+  val = pack1D( newRV_noinc((SV*)values),'d');
+  ASTCALL(
+   astMapPut1D( this, key, size, val, comment);
+  )
+#endif
+
+void
+astMapPut1I( this, key, values, comment)
+  AstKeyMap * this
+  char * key
+  AV * values
+  char * comment
+ PREINIT:
+  int size;
+  int * val;
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapPut1I: Please upgrade to AST V3.5 or newer");
+#else
+  size = av_len(values) + 1;
+  val = pack1D( newRV_noinc((SV*)values),'i');
+  ASTCALL(
+   astMapPut1I( this, key, size, val, comment);
+  )
+#endif
+
+void
+astMapPut1C( this, key, values, comment)
+  AstKeyMap * this
+  char * key
+  AV * values
+  char * comment
+ PREINIT:
+  int size;
+  char ** val;
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapPut1C: Please upgrade to AST V3.5 or newer");
+#else
+  size = av_len(values) + 1;
+  val = pack1Dchar( values );
+  ASTCALL(
+   astMapPut1C( this, key, size, (const char **)val, comment);
+  )
+#endif
+
+void
+astMapPut1A( this, key, values, comment)
+  AstKeyMap * this
+  char * key
+  AV * values
+  char * comment
+ PREINIT:
+  int size;
+  AstObject ** val;
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapPut1A: Please upgrade to AST V3.5 or newer");
+#else
+  size = av_len(values) + 1;
+  val = pack1DAstObj( values );
+  ASTCALL(
+   astMapPut1A( this, key, size, val, comment);
+  )
+#endif
+
+void
+astMapGet0D( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  double RETVAL;
+  int status;
+ PPCODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapGet0D: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+    status = astMapGet0D( this, key, &RETVAL );
+  )
+  if (status != 0) {
+    XPUSHs(sv_2mortal(newSVnv(RETVAL)));
+  } else {
+    XSRETURN_EMPTY;
+  }
+#endif
+
+void
+astMapGet0I( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  int RETVAL;
+  int status;
+ PPCODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapGet0I: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+    status = astMapGet0I( this, key, &RETVAL );
+  )
+  if (status != 0) {
+    XPUSHs(sv_2mortal(newSViv(RETVAL)));
+  } else {
+    XSRETURN_EMPTY;
+  }
+#endif
+
+void
+astMapGet0C( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  char * RETVAL;
+  int status;
+ PPCODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapGet0C: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+    status = astMapGet0C( this, key, (const char **)&RETVAL );
+  )
+  if (status != 0) {
+    XPUSHs(sv_2mortal(newSVpvn(RETVAL,strlen(RETVAL))));
+  } else {
+    XSRETURN_EMPTY;
+  }
+#endif
+
+# Note the underscore in the name because currently we return 
+# a Starlink::AST object rather than a real object and there is
+# a perl layer to rebless. We should probably do this in the C
+# layer
+
+void
+ast_MapGet0A( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  AstObject * RETVAL;
+  int status;
+  SV * sv;
+ PPCODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapGet0A: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+    status = astMapGet0A( this, key, &RETVAL );
+  )
+  if (status != 0) {
+    /* Have an AstObject pointer. Convert to object. */
+    sv = createPerlObject( "AstObjectPtr", RETVAL );
+    XPUSHs(sv_2mortal( sv ));
+  } else {
+    XSRETURN_EMPTY;
+  }
+#endif
+
+
+void
+astMapGet1D( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  int i;
+  int status;
+  double * outarr;
+  int nelems;
+ PPCODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapGet1D: Please upgrade to AST V3.5 or newer");
+#else
+  /* First we need to find out how many elements are in the KeyMap */
+  nelems = astMapLength( this, key );
+  if (nelems == 0) {
+    XSRETURN_EMPTY;
+  }
+
+  /* get some memory */
+  outarr = get_mortalspace( nelems, 'd' );
+
+  ASTCALL(
+    status = astMapGet1D( this, key, nelems, &nelems, outarr );
+  )
+  if (status != 0) {
+    for (i=0; i < nelems; i++) {
+      XPUSHs(sv_2mortal(newSVnv( outarr[i] )));
+    }
+  } else {
+    XSRETURN_EMPTY;
+  }
+#endif
+
+void
+astMapGet1I( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  int i;
+  int status;
+  int * outarr;
+  int nelems;
+ PPCODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapGet1I: Please upgrade to AST V3.5 or newer");
+#else
+  /* First we need to find out how many elements are in the KeyMap */
+  nelems = astMapLength( this, key );
+  if (nelems == 0) {
+    XSRETURN_EMPTY;
+  }
+
+  /* get some memory */
+  outarr = get_mortalspace( nelems, 'i' );
+
+  ASTCALL(
+    status = astMapGet1I( this, key, nelems, &nelems, outarr );
+  )
+  if (status != 0) {
+    for (i=0; i < nelems; i++) {
+      XPUSHs(sv_2mortal(newSViv( outarr[i] )));
+    }
+  } else {
+    XSRETURN_EMPTY;
+  }
+#endif
+
+void
+ast_MapGet1A( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  SV * sv;
+  int i;
+  int status;
+  AstObject ** outarr;
+  int nelems;
+ PPCODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapGet1A: Please upgrade to AST V3.5 or newer");
+#else
+  /* First we need to find out how many elements are in the KeyMap */
+  nelems = astMapLength( this, key );
+  if (nelems == 0) {
+    XSRETURN_EMPTY;
+  }
+
+  /* get some memory */
+  outarr = get_mortalspace( nelems, 'v' );
+
+  ASTCALL(
+    status = astMapGet1A( this, key, nelems, &nelems, outarr );
+  )
+  if (status != 0) {
+    for (i=0; i < nelems; i++) {
+      /* Have an AstObject pointer. Convert to object. */
+      sv = createPerlObject( "AstObjectPtr", outarr[i] );
+      XPUSHs(sv_2mortal( sv ));
+    }
+  } else {
+    XSRETURN_EMPTY;
+  }
+#endif
+
+void
+astMapGet1C( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  SV * sv;
+  int i;
+  int status;
+  char * buffer;
+  char * tmpp;
+  int nelems;
+  int maxlen = 80; /* max length of each string in map. Includes NUL */
+ PPCODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapGet1C: Please upgrade to AST V3.5 or newer");
+#else
+  /* First we need to find out how many elements are in the KeyMap */
+  nelems = astMapLength( this, key );
+  if (nelems == 0) {
+    XSRETURN_EMPTY;
+  }
+
+  /* get some memory */
+  buffer = get_mortalspace( nelems * maxlen, 'u' );
+
+  ASTCALL(
+    status = astMapGet1C( this, key, maxlen, nelems, &nelems, buffer );
+  )
+  if (status != 0) {
+    /* set temp pointer to start of buffer */
+    tmpp = buffer;
+    for (i=0; i < nelems; i++) {
+      /* Jump through the buffer in maxlen hops */
+      XPUSHs(sv_2mortal( newSVpvn(tmpp, strlen(tmpp)) ));
+      tmpp += maxlen;
+    }
+  } else {
+    XSRETURN_EMPTY;
+  }
+#endif
+
+void
+astMapRemove( this, key )
+  AstKeyMap * this
+  char * key
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapRemove: Please upgrade to AST V3.5 or newer");
+#else
+
+  ASTCALL(
+    astMapRemove( this, key );
+  )
+#endif
+
+int
+astMapSize( this )
+  AstKeyMap * this
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapSize: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   RETVAL = astMapSize( this );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+astMapLength( this, key )
+  AstKeyMap * this
+  char * key
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapLength: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   RETVAL = astMapLength( this, key );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+bool
+astMapHasKey( this, key )
+  AstKeyMap * this
+  char * key
+ PREINIT:
+  int haskey;
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapHasKey: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+    haskey = astMapHasKey( this, key );
+  )
+  RETVAL = ( haskey == 0 ? 0 : 1 );
+#endif
+ OUTPUT:
+  RETVAL
+
+const char *
+astMapKey( this, index )
+  AstKeyMap * this
+  int index
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapKey: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+    RETVAL = astMapKey( this, index );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+astMapType( this, key )
+  AstKeyMap * this
+  char * key
+ CODE:
+#ifndef HASKEYMAP
+  Perl_croak(aTHX_ "astMapType: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+   RETVAL = astMapType( this, key );
+  )
+#endif
+ OUTPUT:
+  RETVAL
 
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::Frame PREFIX = ast
 
@@ -1595,7 +2298,7 @@ astResolve( this, point1, point2, point3 )
   cpoint2 = pack1D( newRV_noinc((SV*)point2), 'd');
   cpoint3 = pack1D( newRV_noinc((SV*)point3), 'd');
   cpoint4 = get_mortalspace( naxes, 'd' );
-  
+
   ASTCALL(
     astResolve(this, cpoint1, cpoint2, cpoint3, cpoint4, &d1, &d2);
   )
@@ -1731,11 +2434,57 @@ astInvert( this )
    astInvert( this );
   )
 
+void
+astLinearApprox( this, lbnd, ubnd, tol )
+  AstMapping * this
+  AV * lbnd
+  AV * ubnd
+  double tol
+ PREINIT:
+  int len;
+  double * clbnd;
+  double * cubnd;
+  int nin;
+  int nout;
+  int ncoeff;
+  double * fit;
+  int i;
+  int status;
+ PPCODE:
+#ifndef HASLINEARAPPROX
+   Perl_croak(aTHX_ "astRate: Please upgrade to AST V3.x or greater");
+#else
+  /* get the input values and verify them */
+  nin = astGetI( this, "Nin" );
+  len = av_len( lbnd ) + 1;
+  if ( len != nin ) Perl_croak( aTHX_ "lbnd must contain %d elements", nin );
+  len = av_len( ubnd ) + 1;
+  if ( len != nin ) Perl_croak( aTHX_ "ubnd must contain %d elements", nin );
+  clbnd = pack1D(newRV_noinc((SV*)lbnd), 'd');
+  cubnd = pack1D(newRV_noinc((SV*)ubnd), 'd');
+
+  /* Get memory for the return values */
+  nout = astGetI( this, "Nout");
+  ncoeff = (nin+1) * nout;
+  fit = get_mortalspace( ncoeff, 'd' );
+
+  ASTCALL(
+    status = astLinearApprox( this, clbnd, cubnd, tol, fit );
+  )
+  if ( status == 0) {
+    XSRETURN_EMPTY;
+  } else {
+    for (i = 0; i < ncoeff; i++) {
+      XPUSHs( sv_2mortal( newSVnv( fit[i] ) ) );
+    }
+  }
+#endif
+
 # astMapBox  XXXX
 
 
 # astRate
-#  Returns the rate and ref to array of derivatives
+#  Returns the rate and (sometimes) the second derivatives
 #  Returns empty list if astRate returns AST__BAD
 
 void
@@ -1748,7 +2497,6 @@ astRate( this, at, ax1, ax2 )
   int nin;
   int len;
   double * cat;
-  double RETVAL;
   double d2;
  PPCODE:
 #ifndef HASRATE
@@ -1760,16 +2508,7 @@ astRate( this, at, ax1, ax2 )
       Perl_croak(aTHX_ "Must supply Nin coordinates to astRate [%d != %d]",
                         nin, len);
   cat = pack1D( newRV_noinc((SV*)at), 'd');
-
-  ASTCALL(
-    RETVAL = astRate( this, cat, ax1, ax2, &d2 );
-  )
-  if ( RETVAL != AST__BAD ) {
-     XPUSHs(sv_2mortal(newSVnv(RETVAL)));
-     XPUSHs(sv_2mortal(newSVnv(d2)));
-  } else {
-     XSRETURN_EMPTY;
-  }
+  myAstRate( this, cat ,ax1, ax2, &d2 );
 #endif
 
 
@@ -1866,7 +2605,25 @@ astTran2( this, xin, yin, forward )
 
 # astTranP  XXXX
 
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::RateMap
 
+AstRateMap *
+new( class, map, ax1, ax2, options )
+  char * class
+  AstMapping * map
+  int ax1
+  int ax2
+  char * options
+ CODE:
+#ifndef HASRATEMAP
+  Perl_croak(aTHX_ "astRateMap: Please upgrade to AST V3.5 or newer");
+#else
+  ASTCALL(
+    RETVAL = astRateMap( map, ax1, ax2, options );
+  )
+#endif
+ OUTPUT:
+  RETVAL
 
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::Channel PREFIX = ast
 
@@ -1891,7 +2648,255 @@ astWrite( channel, object )
  OUTPUT:
   RETVAL
 
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::Region PREFIX = ast
+
+AstFrame *
+astGetRegionFrame( this )
+  AstRegion * this
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astGetRegionFrame: Please upgrade to AST V3.5 or greater");
+#else
+  ASTCALL(
+    RETVAL = astGetRegionFrame( this );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+AstRegion *
+astMapRegion( this, map, frame )
+  AstRegion * this
+  AstMapping * map
+  AstFrame * frame
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astMapRegion: Please upgrade to AST V3.5 or greater");
+#else
+  ASTCALL(
+    RETVAL = astMapRegion( this, map, frame );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+# Takes as input a data array and associated pixel bounds, and returns
+# the modified data array and the number of values masked within it.
+# Fortran order is assumed. This routine should really be implemented
+# using PDLs rather than perl linear arrays
+# NOT PROPERLY IMPLEMENTED
+
+void
+astMaskD( this, map, inside, lbnd, ubnd, in, val)
+  AstRegion * this
+  AstMapping * map
+  bool inside
+  AV * lbnd
+  AV * ubnd
+  AV * in
+  double val
+ PREINIT:
+  int len;
+  int ndims;
+  int * clbnd;
+  int * cubnd;
+  double * cin;
+  int nelem;
+  int i;
+  AV * output;
+  int nmasked;
+ PPCODE:
+#ifndef HASREGION
+  Perl_croak(aTHX_ "astNegate: Please upgrade to AST V3.5 or greater");
+#else
+  ndims = astGetI( map, "Nout" );
+  len = av_len( lbnd ) + 1;
+  if ( len != ndims ) Perl_croak( aTHX_ "lbnd must contain %d elements", ndims );
+  len = av_len( ubnd ) + 1;
+  if ( len != ndims ) Perl_croak( aTHX_ "ubnd must contain %d elements", ndims );
+  clbnd = pack1D(newRV_noinc((SV*)lbnd), 'd');
+  cubnd = pack1D(newRV_noinc((SV*)ubnd), 'd');
+  cin = pack1D( newRV_noinc((SV*)in), 'd' );
+  ASTCALL(
+     nmasked = astMaskD( this, map, inside, ndims, clbnd, cubnd, cin, val);
+   )
+  /* but now need to unroll the data array into a perl array */
+  nelem = cubnd[0] - clbnd[0];
+  for ( i=1; i < ndims; i++ ) {
+    nelem *= ( cubnd[i] - clbnd[i] );
+  }
+  output = newAV();
+  unpack1D( newRV_noinc((SV*) output), cin, 'd', nelem);
+  XPUSHs( newRV_noinc((SV*)output));
+  XPUSHs( sv_2mortal(newSVnv(nmasked)));
+#endif
+
+void
+astNegate( this )
+  AstRegion * this
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astNegate: Please upgrade to AST V3.5 or greater");
+#else
+  ASTCALL(
+    astNegate( this );
+  )
+#endif
+
+int
+astOverlap( this, that )
+  AstRegion * this
+  AstRegion * that
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astOverlap: Please upgrade to AST V3.5 or greater");
+#else
+  ASTCALL(
+    RETVAL = astOverlap( this, that );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+void
+astSetUnc( this, unc )
+  AstRegion * this
+  AstRegion * unc
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astSetUnc: Please upgrade to AST V3.5 or greater");
+#else
+  ASTCALL(
+    astSetUnc( this, unc );
+  )
+#endif
+
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::Ellipse
+
+AstEllipse *
+new( class, frame, form, centre, point1, point2, unc, options)
+  char * class
+  AstFrame * frame
+  int form
+  AV * centre
+  AV * point1
+  AV * point2
+  AstRegion * unc
+  char * options
+ PREINIT:
+  int naxes = 2;
+  int len;
+  double * ccentre;
+  double * cpoint1;
+  double * cpoint2;
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astEllipse: Please upgrade to AST V3.5 or greater");
+#else
+  len = av_len( centre ) + 1;
+  if ( len != naxes ) Perl_croak( aTHX_ "centre must contain %d elements", naxes );
+  len = av_len( point1 ) + 1;
+  if ( len != naxes ) Perl_croak( aTHX_ "point1 must contain %d elements", naxes );
+  len = av_len( point2 ) + 1;
+  if ( len != naxes ) Perl_croak( aTHX_ "point2 must contain %d elements", naxes );
+  ccentre = pack1D(newRV_noinc((SV*)centre), 'd');
+  cpoint1 = pack1D(newRV_noinc((SV*)point1), 'd');
+  cpoint2 = pack1D(newRV_noinc((SV*)point2), 'd');
+  ASTCALL(
+     RETVAL = astEllipse( frame, form, ccentre, cpoint1, cpoint2, unc, options);
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::Box
+
+AstBox *
+new( frame, form, point1, point2, unc, options )
+  AstFrame * frame
+  int form
+  AV * point1
+  AV * point2
+  AstRegion * unc
+  char * options
+ PREINIT:
+  double * cpoint2;
+  double * cpoint1;
+  int len;
+  int naxes;
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astBox: Please upgrade to AST V3.5 or greater");
+#else
+  naxes = astGetI( frame, "Naxes" );
+  len = av_len( point1 ) + 1;
+  if ( len != naxes ) Perl_croak( aTHX_ "point1 must contain %d elements", naxes );
+  len = av_len( point2 ) + 1;
+  if ( len != naxes ) Perl_croak( aTHX_ "point2 must contain %d elements", naxes );
+  cpoint1 = pack1D(newRV_noinc((SV*)point1), 'd');
+  cpoint2 = pack1D(newRV_noinc((SV*)point2), 'd');
+   ASTCALL(
+     RETVAL = astBox( frame, form, cpoint1, cpoint2, unc, options);
+   )
+#endif
+ OUTPUT:
+  RETVAL
+
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::Circle
+
+AstCircle *
+new( frame, form, centre, point, unc, options )
+  AstFrame * frame
+  int form
+  AV * centre
+  AV * point
+  AstRegion * unc
+  char * options
+ PREINIT:
+  double * ccentre;
+  double * cpoint;
+  int len;
+  int naxes;
+  int nform;
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astCircle: Please upgrade to AST V3.5 or greater");
+#else
+  naxes = astGetI( frame, "Naxes" );
+  len = av_len( centre ) + 1;
+  if ( len != naxes ) Perl_croak( aTHX_ "point1 must contain %d elements", naxes );
+  /* point depends on form */
+  len = av_len( point ) + 1;
+  if (form == 0) {
+    nform = naxes;
+  } else {
+    nform = 1;
+  }
+  if ( len != nform ) Perl_croak( aTHX_ "point() must contain %d elements", nform );
+  ccentre = pack1D(newRV_noinc((SV*)centre), 'd');
+  cpoint = pack1D(newRV_noinc((SV*)point), 'd');
+  ASTCALL(
+     RETVAL = astCircle( frame, form, ccentre, cpoint, unc, options);
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::FitsChan PREFIX = ast
+
+void
+astPutCards( this, cards )
+  AstFitsChan * this
+  char * cards
+ CODE:
+#ifndef HASPUTCARDS
+   Perl_croak(aTHX_ "astPutCards: Please upgrade to AST V3.2 or greater");
+#else
+  ASTCALL(
+    astPutCards( this, cards );
+  )
+#endif
 
 void
 astPutFits( this, card, overwrite )
@@ -1929,6 +2934,132 @@ astFindFits( this, name, card, inc )
  OUTPUT:
   RETVAL 
   card
+
+void
+astSetFitsCF( this, name, real, imag, comment, overwrite )
+  AstFitsChan * this
+  char * name
+  double real
+  double imag
+  char * comment
+  int overwrite
+ PREINIT:
+  double value[2];
+ CODE:
+#ifndef HASSETFITS
+  Perl_croak(aTHX_ "astSetFitsX: Please upgrade to AST v3.5 or newer");
+#else
+  value[0] = real;
+  value[1] = imag;
+  ASTCALL(
+    astSetFitsCF( this, name, value, comment, overwrite );
+  )
+#endif
+
+void
+astSetFitsCI( this, name, real, imag, comment, overwrite )
+  AstFitsChan * this
+  char * name
+  int real
+  int imag
+  char * comment
+  int overwrite
+ PREINIT:
+  int value[2];
+ CODE:
+#ifndef HASSETFITS
+  Perl_croak(aTHX_ "astSetFitsX: Please upgrade to AST v3.5 or newer");
+#else
+  value[0] = real;
+  value[1] = imag;
+  ASTCALL(
+    astSetFitsCI( this, name, value, comment, overwrite );
+  )
+#endif
+
+
+void
+astSetFitsF( this, name, value, comment, overwrite )
+  AstFitsChan * this
+  char * name
+  double value
+  char * comment
+  int overwrite
+ CODE:
+#ifndef HASSETFITS
+  Perl_croak(aTHX_ "astSetFitsX: Please upgrade to AST v3.5 or newer");
+#else
+  ASTCALL(
+    astSetFitsF( this, name, value, comment, overwrite );
+  )
+#endif
+
+void
+astSetFitsI( this, name, value, comment, overwrite )
+  AstFitsChan * this
+  char * name
+  int value
+  char * comment
+  int overwrite
+ CODE:
+#ifndef HASSETFITS
+  Perl_croak(aTHX_ "astSetFitsX: Please upgrade to AST v3.5 or newer");
+#else
+  ASTCALL(
+    astSetFitsI( this, name, value, comment, overwrite );
+  )
+#endif
+
+void
+astSetFitsL( this, name, value, comment, overwrite )
+  AstFitsChan * this
+  char * name
+  bool value
+  char * comment
+  int overwrite
+ PREINIT:
+  int bval;
+ CODE:
+#ifndef HASSETFITS
+  Perl_croak(aTHX_ "astSetFitsX: Please upgrade to AST v3.5 or newer");
+#else
+  bval = ( value ? 1 : 0);
+  ASTCALL(
+    astSetFitsL( this, name, bval, comment, overwrite );
+  )
+#endif
+
+void
+astSetFitsS( this, name, value, comment, overwrite )
+  AstFitsChan * this
+  char * name
+  char * value
+  char * comment
+  int overwrite
+ CODE:
+#ifndef HASSETFITS
+  Perl_croak(aTHX_ "astSetFitsX: Please upgrade to AST v3.5 or newer");
+#else
+  ASTCALL(
+    astSetFitsS( this, name, value, comment, overwrite );
+  )
+#endif
+
+void
+astSetFitsCN( this, name, value, comment, overwrite )
+  AstFitsChan * this
+  char * name
+  char * value
+  char * comment
+  int overwrite
+ CODE:
+#ifndef HASSETFITS
+  Perl_croak(aTHX_ "astSetFitsX: Please upgrade to AST v3.5 or newer");
+#else
+  ASTCALL(
+    astSetFitsCN( this, name, value, comment, overwrite );
+  )
+#endif
 
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::SpecFrame PREFIX = ast
 
