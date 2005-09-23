@@ -10,7 +10,7 @@ use Graphics::PLplot 0.03 qw/:all/;
 use Starlink::AST;
 use Carp;
 
-'$Revision: 1.12 $ ' =~ /.*:\s(.*)\s\$/ && ($VERSION = $1);
+'$Revision: 1.13 $ ' =~ /.*:\s(.*)\s\$/ && ($VERSION = $1);
 
 =head1 NAME
 
@@ -45,7 +45,7 @@ of the packages public interface.
 
 =head1 REVISION
 
-$Id: PLplot.pm,v 1.12 2004/04/22 02:17:57 timj Exp $
+$Id: PLplot.pm,v 1.13 2005/03/05 01:40:10 agibb Exp $
 
 =head1 METHODS
 
@@ -99,6 +99,12 @@ sub _GMark {
    my $x = shift;
    my $y = shift;
    my $type = shift;
+
+   # Check for supported plot symbols: PLplot does not support ftriangle or fdiamond
+   # Also we will arbitrarily not support anything above 18 for now
+   if ($type < 0 || $type == 13 || $type > 18) {
+     $type = 2;
+   }
 
    if( scalar(@$x) >= 1 && scalar(@$x) == scalar(@$y) ) {
       plcol0(2);

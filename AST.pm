@@ -10,7 +10,7 @@ require DynaLoader;
 use base qw| DynaLoader |;
 
 
-$VERSION = '0.03';
+$VERSION = '0.04';
 
 bootstrap Starlink::AST $VERSION;
 
@@ -164,7 +164,7 @@ The AST library can be downloaded from http://www.starlink.ac.uk/ast
 
 Tim Jenness E<lt>tjenness@cpan.orgE<gt>
 
-Copyright (C) 2004 Tim Jenness. All Rights Reserved.
+Copyright (C) 2004-2005 Tim Jenness. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -313,6 +313,40 @@ sub _rebless {
   return bless $self, $perl_class;
 }
 
+# Hooks for Storable, to allow deep cloning of Starlink::AST objects
+# via dclone().
+sub STORABLE_freeze {
+  my $self = shift;
+
+  my $string = "";
+  my $ch = new Starlink::AST::Channel( sink => sub { $string .= "$_[0]\n" } );
+  $ch->Write( $self );
+  return $string;
+}
+
+sub STORABLE_thaw {
+  my ( $self, $cloning, $serialized ) = @_;
+
+  my @cards = split "\n", $serialized;
+  my $ch = new Starlink::AST::Channel( source => sub{ return shift( @cards ) } );
+
+  # Create a new Starlink::AST object...
+  my $new = $ch->Read();
+
+  # Copy the internal hash representation to the object created by
+  # STORABLE.
+  %$self = %$new;
+
+  # And lie to AST to indicate that we have annulled this object
+  # already. This will prevent the object destructor from freeing the
+  # memory. If that happened, then we'd lose the
+  # pointer in the Starlink::AST object created by STORABLE, which
+  # isn't what we want to have happen.
+  # We have to go through this hoop because STORABLE pre-creates an
+  # object for us
+  $new->{'_annul'} = 1;
+}
+
 package Starlink::AST::Axis;
 use base qw/ Starlink::AST /;
 
@@ -423,6 +457,21 @@ use base qw/ Starlink::AST::Mapping /;
 package Starlink::AST::Frame;
 use base qw/ Starlink::AST::Mapping /;
 
+# Wrapper for PickAxes
+# Uses context to decide whether to return the frame mapping or not
+
+sub PickAxes {
+  my $self = shift;
+  my ($frame, $mapping) = $self->_PickAxes( @_ );
+  $frame = $frame->_rebless();
+  $mapping = $mapping->_rebless();
+  if (wantarray) {
+    return ($frame, $mapping);
+  } else {
+    return $frame;
+  }
+}
+
 package Starlink::AST::Region;
 use base qw/ Starlink::AST::Frame /;
 
@@ -441,7 +490,10 @@ use base qw/ Starlink::AST::Frame /;
 package Starlink::AST::FrameSet;
 use base qw/ Starlink::AST::Frame /;
 
-sub FindFrame {
+# This routine used to be called FindFrame and clashed with the AST
+# native astFindFrame method. Renamed until we can work out what it
+# was meant to be used for.
+sub FindFrameByDomain {
   my $self = shift;
   my $string = shift;
   

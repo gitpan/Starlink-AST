@@ -2,7 +2,7 @@
 
   AST.xs
 
-  Copyright (C) 2004 Tim Jenness. All Rights Reserved.
+  Copyright (C) 2004-2005 Tim Jenness. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -46,6 +46,14 @@ typedef int WcsMapType;
 
 #include "ast.h"
 #include "grf.h"
+
+/* Older versions of AST can require Fortran, so we add dummy main
+   needed by, eg, g95 */
+#if ( AST_MAJOR_VERS < 4 )
+void MAIN_ () {}
+void MAIN__ () {}
+#endif
+
 
 /* The following definitions are required for backwards compatible
    Since AST version 2 does not have these.
@@ -91,12 +99,12 @@ typedef void AstTranMap;
 
 #if ( (AST_MAJOR_VERS == 3 && AST_MINOR_VERS >= 4) || AST_MAJOR_VERS >= 4 )
 #define HASDSBSPECFRAME
-#define HASLINEARAPPROX
 #else
 typedef void AstDSBSpecFrame;
 #endif
 
 #if ( (AST_MAJOR_VERS == 3 && AST_MINOR_VERS >= 5) || AST_MAJOR_VERS >= 4 )
+#define HASLINEARAPPROX
 #define HASSETFITS
 #define HASRATEMAP
 #define HASKEYMAP
@@ -119,7 +127,10 @@ typedef void AstEllipse;
 #define RATE_HAS_SECOND_DERIVATIVE 1
 #endif
 
-
+#if ( (AST_MAJOR_VERS == 4 && AST_MINOR_VERS >= 1) || AST_MAJOR_VERS >= 5 )
+#define HASMAPSPLIT
+#else
+#endif
 
 
 
@@ -213,11 +224,12 @@ void astThrowException ( int status, AV* errorstack ) {
 static char *sourceWrap( const char *(*source)() ) {
   dSP;
   SV * cb;
+  SV * myobject;
   SV * retsv;
   int count;
   STRLEN len;
   char * line;
-  char * retval;
+  char * retval = NULL;
 
   /* Return directly if ast status is set. */
   if ( !astOK ) return NULL;
@@ -226,8 +238,14 @@ static char *sourceWrap( const char *(*source)() ) {
     return NULL;
   }
 
-  /* Need to cast the source argument to a SV*  */
-  cb = (SV*) source;
+  /* Need to cast the source argument to a SV* and extract the callback from the object */
+  myobject = (SV*) source;
+  cb = getPerlObjectAttr( myobject, "_source" );
+  if (cb == NULL) {
+    astError( AST__INTER, "Callback in channel 'source' not defined!");
+    return NULL;
+  }
+  cb = SvRV( cb );
 
   /* call the callback with the supplied line */
   ENTER;
@@ -435,6 +453,41 @@ AST__BAD()
  OUTPUT:
   RETVAL
 
+int
+AST__CURRENT()
+ CODE:
+#ifdef AST__CURRENT
+    RETVAL = AST__CURRENT;
+#else
+    Perl_croak(aTHX_ "Constant AST__CURRENT not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__NOFRAME()
+ CODE:
+#ifdef AST__NOFRAME
+    RETVAL = AST__NOFRAME;
+#else
+    Perl_croak(aTHX_ "Constant AST__NOFRAME not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__BASE()
+ CODE:
+#ifdef AST__BASE
+    RETVAL = AST__BASE;
+#else
+    Perl_croak(aTHX_ "Constant AST__BASE not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+
+
 MODULE = Starlink::AST     PACKAGE = Starlink::AST PREFIX = ast
 
 
@@ -555,6 +608,7 @@ new( class, naxes, options )
   ASTCALL(
    RETVAL = astFrame( naxes, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -569,6 +623,7 @@ new( class, frame, options )
   ASTCALL(
    RETVAL = astFrameSet( frame, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -584,6 +639,7 @@ new( class, frame1, frame2, options )
   ASTCALL(
    RETVAL = astCmpFrame( frame1, frame2, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -602,6 +658,7 @@ new( class, specval, specfrm, options )
   ASTCALL(
    RETVAL = astFluxFrame( specval, specfrm, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -621,6 +678,7 @@ new( class, frame1, frame2, options )
   ASTCALL(
    RETVAL = astSpecFluxFrame( frame1, frame2, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -638,6 +696,7 @@ new( class, map1, map2, series, options )
   ASTCALL(
    RETVAL = astCmpMap( map1, map2, series, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -696,9 +755,16 @@ _new( class, sourcefunc, sinkfunc, options )
       setPerlObjectAttr( RETVAL, "_sink", newRV( SvRV(sinkfunc) ));
     }
 
-    /* Source functions are called immediately so we can simply
-       pass the CV directly to the constructor */
-    if (has_source) source = sourcefunc;
+    /* In some cases the source routine is called after this constructor
+       returns. We therefore need to store the source function in the object
+       as well. */
+    if (has_source) {
+      /* Store reference to object */
+      source = rv;
+      /* and store the actual sink callback in the object */
+      setPerlObjectAttr( RETVAL, "_source", newRV( SvRV(sourcefunc) ));
+    }
+
   }
 
   /* Need to use astChannelFor style interface so that we can register
@@ -728,6 +794,7 @@ _new( class, sourcefunc, sinkfunc, options )
   } else {
      Perl_croak(aTHX_ "Channel of class %s not recognized.", class );
   }
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -745,6 +812,7 @@ new( class, options )
   ASTCALL(
    RETVAL = astGrismMap( options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -762,6 +830,7 @@ new( class, name, nin, nout, options )
   ASTCALL(
    RETVAL = astIntraMap( name, nin, nout, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -783,6 +852,7 @@ new( class, lut, start, inc, options )
   ASTCALL(
    RETVAL = astLutMap( nlut, clut, start, inc, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -810,6 +880,7 @@ new( class, nin, nout, fwd, inv, options )
   cinv = pack1Dchar( inv );
   RETVAL = astMathMap( nin, nout, nfwd, (const char **)cfwd, 
                        ninv, (const char**)cinv, options );
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -844,6 +915,7 @@ new( class, nin, nout, matrix, options )
   ASTCALL(
    RETVAL = astMatrixMap( nin, nout, form, cmatrix, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -870,6 +942,7 @@ _new( class, frame, graphbox, basebox, options )
   ASTCALL(
     RETVAL = astPlot( frame, cgraphbox, cbasebox, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -893,6 +966,7 @@ new( class, disco, pcdcen, options )
   ASTCALL(
    RETVAL = astPcdMap( disco, cpcdcen, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -937,6 +1011,7 @@ new( class, inperm, outperm, constant, options )
   ASTCALL(
    RETVAL = astPermMap(nin, cinperm, nout, coutperm, cconstant, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -970,6 +1045,7 @@ new( class, shift, options )
   ASTCALL(
    RETVAL = astShiftMap( ncoord, cshift, options);
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -984,6 +1060,7 @@ new( class, options )
   ASTCALL(
    RETVAL = astSkyFrame( options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1000,6 +1077,7 @@ new( class, options )
   ASTCALL(
    RETVAL = astSpecFrame( options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -1017,6 +1095,7 @@ new( class, options )
   ASTCALL(
    RETVAL = astDSBSpecFrame( options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -1033,6 +1112,7 @@ new( class, flags, options )
   ASTCALL(
    RETVAL = astSlaMap( flags, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1046,6 +1126,7 @@ new( class, options )
   ASTCALL(
    RETVAL = astSphMap( options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1064,6 +1145,7 @@ new( class, nin, flags, options )
   ASTCALL(
    RETVAL = astSpecMap( nin, flags, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -1084,6 +1166,7 @@ new( class, map1, map2, options )
   ASTCALL(
    RETVAL = astTranMap( map1, map2, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -1099,6 +1182,7 @@ new( class, ncoord, options )
   ASTCALL(
    RETVAL = astUnitMap( ncoord, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1116,6 +1200,7 @@ new( class, ncoord, type, lonax, latax, options )
   ASTCALL(
    RETVAL = astWcsMap( ncoord, type, lonax, latax,options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1137,6 +1222,7 @@ new( class, ina, inb, outa, outb, options )
                       pack1D(newRV_noinc((SV*)inb),'d'),
                       pack1D(newRV_noinc((SV*)outa),'d'),
                       pack1D(newRV_noinc((SV*)outb),'d'),options );
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1152,6 +1238,7 @@ new( class, ncoord, zoom, options )
   ASTCALL(
    RETVAL = astZoomMap( ncoord, zoom, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1189,6 +1276,7 @@ ast_Clone( this )
   ASTCALL(
    RETVAL = astClone( this );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1199,6 +1287,7 @@ ast_Copy( this )
   ASTCALL(
    RETVAL = astCopy( this );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -1340,6 +1429,9 @@ astTest( this, attrib )
 # Use annul as automatic destructor
 # For automatic destructor we do not want to throw an exception
 # on error. So do not use ASTCALL. Do a manual printf to stderr and continue.
+# Does nothing if a key _annul is present in the object and is true.
+# This condition is usually met if the user has manually called the Annull
+# method on the object.
 
 void
 astDESTROY( obj )
@@ -1404,6 +1496,7 @@ new( class, options )
   ASTCALL(
    RETVAL = astKeyMap( options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -2040,6 +2133,7 @@ astConvert( from, to, domainlist )
   ASTCALL(
    RETVAL = astConvert( from, to, domainlist );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -2081,6 +2175,7 @@ astFindFrame( this, template, domainlist )
   ASTCALL(
    RETVAL = astFindFrame( this, template, domainlist );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -2239,30 +2334,38 @@ astPermAxes( this, perm )
   )
 
 # Returns a new frame and an optional mapping
-# Use a boolean to control whether a mapping is returned
-# Ignore for now
+# Also note that we count axes ourselves
 
-# Also note that we count axes ourselfs
+# We always ask for the return mapping and we always
+# return both the new frame and the mapping from the old
+# The perl side decides whether the user wants to keep the
+# mapping or not depending on context (Which is unavailable
+# to XS)
 
-AstFrame *
-astPickAxes( this, axes )
+void
+ast_PickAxes( this, axes )
   AstFrame * this;
   AV* axes
  PREINIT:
   int maxaxes;
   int naxes;
   int * aa;
- CODE:
+  AstMapping * map;
+  AstFrame * newframe;
+ PPCODE:
   maxaxes = astGetI(this, "Naxes");
   naxes = av_len(axes) + 1;
   if ( naxes > maxaxes )
     Perl_croak(aTHX_ "Number of axes selected must be less than number of axes in frame");
   aa = pack1D( newRV_noinc((SV*)axes), 'i');
   ASTCALL(
-   RETVAL = astPickAxes( this, naxes, aa, NULL);
+   newframe = astPickAxes( this, naxes, aa, &map);
   )
- OUTPUT:
-  RETVAL
+  if ( newframe == AST__NULL ) XSRETURN_UNDEF;
+  /* Create perl objects from the two return arguments */
+  XPUSHs(sv_2mortal( createPerlObject( "AstFramePtr", (AstObject*)newframe )));
+  XPUSHs(sv_2mortal( createPerlObject( "AstMappingPtr", (AstObject*)map )));
+
 
 # Returns reference to array [point4], plus two distances
 
@@ -2366,6 +2469,7 @@ astGetFrame( this, iframe )
   ASTCALL(
    RETVAL = astGetFrame( this, iframe );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -2378,6 +2482,7 @@ astGetMapping( this, iframe1, iframe2 )
   ASTCALL(
    RETVAL = astGetMapping( this, iframe1, iframe2 );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -2452,7 +2557,7 @@ astLinearApprox( this, lbnd, ubnd, tol )
   int status;
  PPCODE:
 #ifndef HASLINEARAPPROX
-   Perl_croak(aTHX_ "astRate: Please upgrade to AST V3.x or greater");
+   Perl_croak(aTHX_ "astLinearApprox: Please upgrade to AST V3.4 or greater");
 #else
   /* get the input values and verify them */
   nin = astGetI( this, "Nin" );
@@ -2522,6 +2627,7 @@ astSimplify( this )
   ASTCALL(
    RETVAL = astSimplify( this );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -2603,7 +2709,97 @@ astTran2( this, xin, yin, forward )
 
 # astTranN  XXXX
 
-# astTranP  XXXX
+# astTranP
+
+# Note that to allow a better perl interface, we put all the array
+# arguments at the end and allow an arbitrary number of coordinates
+# to be provided without having to use an array of arrays
+
+# To match the interface to astTranP there must be an input array
+# per input axis, and each array must contain the same number of elements
+# referring to the coordinate for a specific dimension. ie for a 2D coordinate
+# you will need just two arrays: the first array has all the X coordinates
+# and the second has all the Y coordinates.
+
+#  @transformed = $wcs->TranP( 1, [ 1,0 ], [1,-1] ... );
+
+void
+astTranP( this, forward, ... )
+  AstMapping * this
+  int forward
+ PREINIT:
+  int i;
+  int n;
+  int argoff = 2; /* number of fixed arguments */
+  int ndims;
+  int npoint;
+  int naxin;
+  int naxout;
+  int ncoord_in;
+  int ncoord_out;
+  double **ptr_in;
+  double **ptr_out;
+ PPCODE:
+  /* Make sure we have some coordinates to transform */
+  ndims = items - argoff;
+  if (ndims > 0) {
+    /* Number of in and output coordinates required for this mapping */
+    naxin = astGetI( this, "Nin" );
+    naxout = astGetI( this, "Nout" );
+
+    /* The required dimensionality depends on direction */
+    if (forward) {
+      ncoord_in = naxin;
+      ncoord_out = naxout;
+    } else {
+      ncoord_in = naxout;
+      ncoord_out = naxin;
+    }
+
+    /* Make sure that the number of supplied arguments matches the
+       number of required input dimensions */
+    if ( ndims != ncoord_in )
+      Perl_croak(aTHX_ "Number of input arrays must be identical to the number of coordinates in the input frame (%d != %d )", ndims, ncoord_in);
+
+    /* Get some memory for the input and output pointer arrays */
+    ptr_in = get_mortalspace( ncoord_in, 'v' );
+    ptr_out = get_mortalspace( ncoord_out, 'v' );
+
+    /* Need to get the number of input elements in the first array */
+    npoint = (int)nelem1D( ST(argoff) );
+
+    /* Loop over all the remaining arrays and store them in an array */
+    for (i = argoff; i<items; i++) {
+       int count = i - argoff;
+       /* input coordinates */
+       ptr_in[count] = pack1D( ST(i), 'd' );
+
+       /* Check size */
+       n = nelem1D( ST(i) );
+       if (n != npoint)
+          Perl_croak(aTHX_ "Input array %d has differing number of elements to first array (%d != %d)",
+                     count, n, npoint);
+
+       /* output coordinates */
+       ptr_out[count] = get_mortalspace( npoint, 'd' );
+    }
+
+    /* Call AST */
+    ASTCALL (
+      astTranP( this, npoint, ncoord_in, (const double**)ptr_in, forward, ncoord_out, ptr_out);
+    )
+
+    /* Copy the output to perl */
+    for (i = 0; i < ncoord_out; i++) {
+       AV* outarr = newAV();
+       unpack1D( newRV_noinc((SV*)outarr), ptr_out[i], 'd', npoint);
+       XPUSHs( newRV_noinc((SV*)outarr) );
+    }
+
+  } else {
+    /* no input, no output */
+    XSRETURN_EMPTY;
+  }
 
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::RateMap
 
@@ -2621,6 +2817,7 @@ new( class, map, ax1, ax2, options )
   ASTCALL(
     RETVAL = astRateMap( map, ax1, ax2, options );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -2634,6 +2831,7 @@ ast_Read( channel )
   ASTCALL(
    RETVAL = astRead( channel );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
  OUTPUT:
   RETVAL
 
@@ -2660,6 +2858,7 @@ astGetRegionFrame( this )
   ASTCALL(
     RETVAL = astGetRegionFrame( this );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -2676,6 +2875,7 @@ astMapRegion( this, map, frame )
   ASTCALL(
     RETVAL = astMapRegion( this, map, frame );
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -2805,6 +3005,7 @@ new( class, frame, form, centre, point1, point2, unc, options)
   ASTCALL(
      RETVAL = astEllipse( frame, form, ccentre, cpoint1, cpoint2, unc, options);
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -2838,6 +3039,7 @@ new( frame, form, point1, point2, unc, options )
    ASTCALL(
      RETVAL = astBox( frame, form, cpoint1, cpoint2, unc, options);
    )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
@@ -2878,6 +3080,7 @@ new( frame, form, centre, point, unc, options )
   ASTCALL(
      RETVAL = astCircle( frame, form, ccentre, cpoint, unc, options);
   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
 #endif
  OUTPUT:
   RETVAL
