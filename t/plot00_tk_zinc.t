@@ -3,21 +3,26 @@
 use strict;
 use Test::More;
 
-require_ok("Starlink::AST");
-require_ok("Starlink::AST::Tk");
-
-
 BEGIN {
 
- use Tk;
- eval "use Tk::Button;";
+ eval "use Tk; use Tk::Button;";
  if ( $@ ) {
    plan skip_all => "Tk modules not installed";
    exit;
- } else {
-   plan tests => 16;
  }
+
+ eval "use Tk::Zinc";
+ if ($@) {
+   plan skip_all => "Tk::Zinc module not installed";
+   exit;
+ }
+
+ # we can test
+ plan tests => 18;
 };
+
+require_ok("Starlink::AST");
+require_ok("Starlink::AST::Tk");
 
 # create Tk test harness
 my $c = create_window();
@@ -77,6 +82,12 @@ _text_and_box( $e, "Testing", 0.2, 0.6, "CC", 1, 0);
 _text_and_box( $e, "TestingCC", 0.4, 0.6, "CC", -1, 0);
 _text_and_box( $e, "TestingBL", 0.4, 0.6, "BL", -1, 0);
 
+( $status, $old_value) = Starlink::AST::Tk::_GAttr( $e, Starlink::AST::Grf::GRF__SIZE(),
+						    2,
+						    Starlink::AST::Grf::GRF__TEXT() );
+_text_and_box( $e, "Size", 0.6, 0.3, "CC", 1, 0);
+
+
 # enter Tk mainloop()
 MainLoop();
 
@@ -97,10 +108,10 @@ sub create_window {
    $MW->after( 1000, sub { exit; } );
 
    # create the canvas widget
-   my $canvas = $MW->Canvas( -width       => 640, 
-                             -height      => 480, 
-                             -background  => 'dark grey',
-                             -borderwidth => 3 );
+   my $canvas = $MW->Zinc( -width       => 640, 
+			   -height      => 480, 
+			   -backcolor   => 'darkgrey',
+			   -borderwidth => 3 );
    $canvas->pack();
 
    my $frame = $MW->Frame( -relief => 'flat', -borderwidth => 1 );

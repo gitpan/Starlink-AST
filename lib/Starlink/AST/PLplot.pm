@@ -10,7 +10,7 @@ use Graphics::PLplot 0.03 qw/:all/;
 use Starlink::AST;
 use Carp;
 
-'$Revision: 1.13 $ ' =~ /.*:\s(.*)\s\$/ && ($VERSION = $1);
+$VERSION = '2.00';
 
 =head1 NAME
 
@@ -45,7 +45,7 @@ of the packages public interface.
 
 =head1 REVISION
 
-$Id: PLplot.pm,v 1.13 2005/03/05 01:40:10 agibb Exp $
+$Id$
 
 =head1 METHODS
 
@@ -731,7 +731,7 @@ sub mm2world {
 
 =head1 COPYRIGHT
 
-Copyright (C) 2004 Particle Physics and Astronomy Research Council.
+Copyright (C) 2004-2005 Particle Physics and Astronomy Research Council.
 All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
@@ -752,7 +752,8 @@ Place,Suite 330, Boston, MA  02111-1307, USA
 
 Tim Jenness E<lt>tjenness@cpan.orgE<gt>,
 Alasdair Allan E<lt>aa@astro.ex.ac.ukE<gt>,
-Brad Cavanagh E<lt>b.cavanagh@jach.hawaii.eduE<gt>
+Brad Cavanagh E<lt>b.cavanagh@jach.hawaii.eduE<gt>,
+Andy Gibb E<lt>agibb@phas.ubc.caE<gt>.
 
 
 =cut

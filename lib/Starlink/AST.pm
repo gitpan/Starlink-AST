@@ -10,7 +10,7 @@ require DynaLoader;
 use base qw| DynaLoader |;
 
 
-$VERSION = '0.04';
+$VERSION = '0.99';
 
 bootstrap Starlink::AST $VERSION;
 
@@ -298,7 +298,7 @@ sub Clone {
 
 sub Copy {
   my $self = shift;
-  my $new = $self->_Clone();
+  my $new = $self->_Copy();
   return bless $new, ref($self);
 }
 
@@ -454,6 +454,9 @@ use base qw/ Starlink::AST::Mapping /;
 package Starlink::AST::ZoomMap;
 use base qw/ Starlink::AST::Mapping /;
 
+package Starlink::AST::TimeMap;
+use base qw/ Starlink::AST::Mapping /;
+
 package Starlink::AST::Frame;
 use base qw/ Starlink::AST::Mapping /;
 
@@ -478,10 +481,22 @@ use base qw/ Starlink::AST::Frame /;
 package Starlink::AST::Circle;
 use base qw/ Starlink::AST::Region /;
 
+package Starlink::AST::Polygon;
+use base qw/ Starlink::AST::Region /;
+
 package Starlink::AST::Ellipse;
 use base qw/ Starlink::AST::Region /;
 
 package Starlink::AST::Box;
+use base qw/ Starlink::AST::Region /;
+
+package Starlink::AST::Interval;
+use base qw/ Starlink::AST::Region /;
+
+package Starlink::AST::CmpRegion;
+use base qw/ Starlink::AST::Region /;
+
+package Starlink::AST::NullRegion;
 use base qw/ Starlink::AST::Region /;
 
 package Starlink::AST::FluxFrame;
@@ -489,6 +504,16 @@ use base qw/ Starlink::AST::Frame /;
 
 package Starlink::AST::FrameSet;
 use base qw/ Starlink::AST::Frame /;
+
+# Convert to proper class
+
+sub GetFrame {
+  my $self = shift;
+  my $obj = $self->_GetFrame( $_[0] );
+  if (defined $obj) {
+    return $obj->_rebless();
+  }
+}
 
 # This routine used to be called FindFrame and clashed with the AST
 # native astFindFrame method. Renamed until we can work out what it
@@ -673,5 +698,8 @@ use base qw/ Starlink::AST::SpecFrame /;
 
 package Starlink::AST::SpecFluxFrame;
 use base qw/ Starlink::AST::CmpFrame /;
+
+package Starlink::AST::TimeFrame;
+use base qw/ Starlink::AST::Frame /;
 
 1;

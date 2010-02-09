@@ -120,6 +120,18 @@ typedef void AstRegion;
 typedef void AstBox;
 typedef void AstCircle;
 typedef void AstEllipse;
+typedef void AstNullRegion;
+typedef void AstPolygon;
+typedef void AstInterval;
+typedef void CmpRegion;
+#endif
+
+#if ( (AST_MAJOR_VERS == 3 && AST_MINOR_VERS >= 7) || AST_MAJOR_VERS >= 4 )
+#define HASTIMEFRAME
+#define HASTIMEMAP
+#else
+typedef void AstTimeFrame;
+typedef void AstTimeMap;
 #endif
 
 /* between v3.0 and v3.4 astRate returned the second derivative */
@@ -221,7 +233,7 @@ void astThrowException ( int status, AV* errorstack ) {
    reference counting or keeping copies of the function around.
  */
 
-static char *sourceWrap( const char *(*source)() ) {
+static char *sourceWrap( const char *(*source)(), int *status ) {
   dSP;
   SV * cb;
   SV * myobject;
@@ -288,7 +300,7 @@ static char *sourceWrap( const char *(*source)() ) {
   return retval;
 }
 
-static void sinkWrap( void (*sink)(const char *), const char *line ) {
+static void sinkWrap( void (*sink)(const char *), const char *line, int *status ) {
   dSP;
   SV * cb;
   SV * myobject;
@@ -352,7 +364,7 @@ AV* ErrBuff;
     code \
     astWatch( old_ast_status ); \
     /* Need to remove the MUTEX before we croak [but must copy the error buffer] */ \
-    My_astCopyErrMsg( &local_err ); \
+    My_astCopyErrMsg( &local_err, *my_xsstatus ); \
     MUTEX_UNLOCK(&AST_mutex); \
     if ( *my_xsstatus != 0 ) { \
       astThrowException( *my_xsstatus, local_err ); \
@@ -391,13 +403,17 @@ void My_astClearErrMsg () {
 
    This is required because astPutErr can only use the static version
    of the array.
+
+   Does not try to do anything if status is 0
  */
 
-void My_astCopyErrMsg ( AV ** newbuff ) {
+void My_astCopyErrMsg ( AV ** newbuff, int status ) {
   int i;
   SV ** elem;
+  if (status == 0) return;
 
   *newbuff = newAV();
+  sv_2mortal((SV*)*newbuff);
   for (i = 0; i <= av_len( ErrBuff ) ; i++ ) {
     elem = av_fetch( ErrBuff, i, 0);
     if (elem != NULL ) {
@@ -847,7 +863,7 @@ new( class, lut, start, inc, options )
   int nlut;
   double * clut;
  CODE:
-  nlut = av_len( lut );
+  nlut = av_len( lut ) + 1;
   clut = pack1D( newRV_noinc((SV*)lut), 'd' );
   ASTCALL(
    RETVAL = astLutMap( nlut, clut, start, inc, options );
@@ -900,9 +916,9 @@ new( class, nin, nout, matrix, options )
   int form;
   double * cmatrix;
  CODE:
-  len = av_len( matrix );
+  len = av_len( matrix ) + 1;
   /* determine form from number of elements */
-  if (len == -1) {
+  if (len == 0) {
     form = 2;
   } else if (len == nin || len == nout ) {
     form = 1;
@@ -958,8 +974,8 @@ new( class, disco, pcdcen, options )
   int len;
   double * cpcdcen;
  CODE:
-  len = av_len( pcdcen );
-  if (len != 1 ) {
+  len = av_len( pcdcen ) + 1;
+  if (len != 2 ) {
     Perl_croak(aTHX_ "Must supply two values to PcdCen");
   }
   cpcdcen = pack1D(newRV_noinc((SV*)pcdcen), 'd');
@@ -987,22 +1003,22 @@ new( class, inperm, outperm, constant, options )
   int nin;
   int nout;
  CODE:
-  nin = av_len( inperm );
-  if (nin == -1 ) {
+  nin = av_len( inperm ) + 1;
+  if (nin == 0 ) {
     /* no values */
     cinperm = NULL;
   } else {
     cinperm = pack1D(newRV_noinc((SV*)inperm), 'i' );
   }
-  nout = av_len( outperm );
-  if (nout == -1 ) {
+  nout = av_len( outperm ) + 1;
+  if (nout == 0 ) {
     /* no values */
     coutperm = NULL;
   } else {
     coutperm = pack1D(newRV_noinc((SV*)outperm), 'i' );
   }
-  len = av_len( constant );
-  if (len == -1 ) {
+  len = av_len( constant ) + 1;
+  if (len == 0 ) {
     /* no values */
     cconstant = NULL;
   } else {
@@ -1040,7 +1056,7 @@ new( class, shift, options )
 #ifndef HASSHIFTMAP  
    Perl_croak(aTHX_ "ShiftMap: Please upgrade to AST V3.x or greater");
 #else 
-  ncoord = av_len( shift );
+  ncoord = av_len( shift ) + 1;
   cshift = pack1D(newRV_noinc((SV*)shift), 'd');
   ASTCALL(
    RETVAL = astShiftMap( ncoord, cshift, options);
@@ -1100,6 +1116,23 @@ new( class, options )
  OUTPUT:
   RETVAL
 
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::TimeFrame
+
+AstTimeFrame *
+new( class, options )
+  char * class
+  char * options
+ CODE:
+#ifndef HASTIMEFRAME
+   Perl_croak(aTHX_ "TimeFrame: Please upgrade to AST V3.7 or greater");
+#else
+  ASTCALL(
+   RETVAL = astTimeFrame( options );
+  )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
+#endif
+ OUTPUT:
+  RETVAL
 
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::SlaMap
 
@@ -1150,6 +1183,23 @@ new( class, nin, flags, options )
  OUTPUT:
   RETVAL
 
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::TimeMap
+
+AstTimeMap *
+new( flags, options )
+  int flags
+  char * options
+ CODE:
+#ifndef HASTIMEMAP
+   Perl_croak(aTHX_ "TimeMap: Please upgrade to AST V3.7 or greater");
+#else
+  ASTCALL(
+   RETVAL = astTimeMap( flags, options );
+  )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
+#endif
+ OUTPUT:
+  RETVAL
 
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::TranMap
 
@@ -1465,7 +1515,7 @@ astDESTROY( obj )
     old_ast_status = astWatch( my_xsstatus );
     astAnnul( this );
     astWatch( old_ast_status );
-    My_astCopyErrMsg( &local_err );
+    My_astCopyErrMsg( &local_err, *my_xsstatus );
     MUTEX_UNLOCK(&AST_mutex);
     if (*my_xsstatus != 0 ) {
       for (i=0; i <= av_len( local_err ); i++ ) {
@@ -2205,25 +2255,40 @@ astGetActiveUnit( this )
  OUTPUT:
   RETVAL
 
+# @normalised = $wcs->Norm( @unnormalised );
+
 void
-astNorm( this, value )
+astNorm( this, ... )
   AstFrame * this
-  AV* value
  PREINIT:
+  int argoff = 1; /* number of fixed arguments */
   int naxes;
   double * aa;
- CODE:
+  int i;
+  int ncoord_in;
+  double * inputs;
+ PPCODE:
   /* Create C arrays of the correct dimensions */
   naxes = astGetI( this, "Naxes" );
-
+  ncoord_in = items - argoff;
+  
   /* Copy from the perl array to the C array */
-  if (av_len(value) != naxes-1)
+  if (naxes != ncoord_in )
      Perl_croak(aTHX_ "Number of elements in first coord array must be %d",
                 naxes);
-  aa = pack1D( newRV_noinc((SV*)value), 'd');
+  aa = get_mortalspace( ncoord_in, 'd' );
+  for (i=0; i<ncoord_in; i++) {
+     int argpos = i + argoff;
+     aa[i] = SvNV( ST(argpos) );
+  }
+
   ASTCALL(
    astNorm( this, aa );
   )
+
+  for (i=0; i<naxes; i++) {
+    XPUSHs( sv_2mortal( newSVnv( aa[i] ) ) );
+  }
 
 # Return list
 
@@ -2462,7 +2527,7 @@ astAddFrame( this, iframe, map, frame)
 
 
 AstFrame *
-astGetFrame( this, iframe )
+ast_GetFrame( this, iframe )
   AstFrameSet * this
   int iframe
  CODE:
@@ -2780,8 +2845,10 @@ astTranP( this, forward, ... )
           Perl_croak(aTHX_ "Input array %d has differing number of elements to first array (%d != %d)",
                      count, n, npoint);
 
-       /* output coordinates */
-       ptr_out[count] = get_mortalspace( npoint, 'd' );
+    }                    
+    /* Allocate memory for the output coordinates */
+    for (i = 0; i < ncoord_out; i++) {
+       ptr_out[i] = get_mortalspace( npoint, 'd' );
     }
 
     /* Call AST */
@@ -2986,6 +3053,7 @@ new( class, frame, form, centre, point1, point2, unc, options)
  PREINIT:
   int naxes = 2;
   int len;
+  int nreq;
   double * ccentre;
   double * cpoint1;
   double * cpoint2;
@@ -2996,9 +3064,14 @@ new( class, frame, form, centre, point1, point2, unc, options)
   len = av_len( centre ) + 1;
   if ( len != naxes ) Perl_croak( aTHX_ "centre must contain %d elements", naxes );
   len = av_len( point1 ) + 1;
-  if ( len != naxes ) Perl_croak( aTHX_ "point1 must contain %d elements", naxes );
+  if ( len != 2 ) Perl_croak( aTHX_ "point1 must contain %d elements", 2 );
   len = av_len( point2 ) + 1;
-  if ( len != naxes ) Perl_croak( aTHX_ "point2 must contain %d elements", naxes );
+  if (form == 0) {
+    nreq = naxes;
+  } else {
+    nreq = 1;
+  }
+  if ( len != nreq ) Perl_croak( aTHX_ "point2 must contain %d elements not %d", nreq, len );
   ccentre = pack1D(newRV_noinc((SV*)centre), 'd');
   cpoint1 = pack1D(newRV_noinc((SV*)point1), 'd');
   cpoint2 = pack1D(newRV_noinc((SV*)point2), 'd');
@@ -3010,10 +3083,12 @@ new( class, frame, form, centre, point1, point2, unc, options)
  OUTPUT:
   RETVAL
 
+
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::Box
 
 AstBox *
-new( frame, form, point1, point2, unc, options )
+new( class, frame, form, point1, point2, unc, options )
+  char * class
   AstFrame * frame
   int form
   AV * point1
@@ -3044,10 +3119,164 @@ new( frame, form, point1, point2, unc, options )
  OUTPUT:
   RETVAL
 
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::Interval
+
+AstInterval *
+new( class, frame, lbnd, ubnd, unc, options )
+  char * class
+  AstFrame * frame
+  AV * lbnd
+  AV * ubnd
+  AstRegion * unc
+  char * options
+ PREINIT:
+  double * clbnd;
+  double * cubnd;
+  int len;
+  int naxes;
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astInterval: Please upgrade to AST V3.5 or greater");
+#else
+  naxes = astGetI( frame, "Naxes" );
+  len = av_len( lbnd ) + 1;
+  if ( len != naxes ) Perl_croak( aTHX_ "lbnd must contain %d elements", naxes );
+  len = av_len( ubnd ) + 1;
+  if ( len != naxes ) Perl_croak( aTHX_ "ubnd must contain %d elements", naxes );
+  clbnd = pack1D(newRV_noinc((SV*)lbnd), 'd');
+  cubnd = pack1D(newRV_noinc((SV*)ubnd), 'd');
+   ASTCALL(
+     RETVAL = astInterval( frame, clbnd, cubnd, unc, options);
+   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
+#endif
+ OUTPUT:
+  RETVAL
+
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::Polygon
+
+# Note that the interface differs to the low level routine
+
+AstPolygon *
+new( class, frame, xpoints, ypoints, unc, options )
+  char * class
+  AstFrame * frame
+  AV * xpoints
+  AV * ypoints
+  AstRegion * unc
+  char * options
+ PREINIT:
+  int i;
+  int xlen;
+  int ylen;
+  double * points;
+  double * cxpoints;
+  double * cypoints;
+  double * x;
+  double * y;
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astPolygon: Please upgrade to AST V3.5 or greater");
+#else
+   /* count elements */
+   xlen = av_len( xpoints ) + 1;
+   ylen = av_len( ypoints ) + 1;
+   if ( xlen != ylen ) Perl_croak( aTHX_ "number of x and y points differ (%d != %d)",
+                           xlen, ylen );
+   cxpoints = pack1D(newRV_noinc((SV*)xpoints), 'd');
+   cypoints = pack1D(newRV_noinc((SV*)ypoints), 'd');
+
+   /* Create memory for the array as required by AST */
+   points = get_mortalspace( xlen * 2, 'd');
+
+   /* copy points in */
+   x = points;
+   y = points + xlen; /* offset into the array */
+   for (i = 0; i < xlen; i++ ) {
+     x[i] = cxpoints[i];
+     y[i] = cypoints[i];
+   }
+
+   ASTCALL(
+     RETVAL = astPolygon(frame, xlen, xlen, points, unc, options );
+   )
+   if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
+#endif
+ OUTPUT:
+  RETVAL  
+
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::NullRegion
+
+AstNullRegion *
+new( class, frame, unc, options )
+  char * class
+  AstFrame * frame
+  AstRegion * unc
+  char * options
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astNullRegion: Please upgrade to AST V3.5 or greater");
+#else
+   ASTCALL(
+     RETVAL = astNullRegion( frame, unc, options);
+   )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
+#endif
+ OUTPUT:
+  RETVAL
+
+MODULE = Starlink::AST   PACKAGE = Starlink::AST::Region	PREFIX = ast
+
+# Note that we are trying to make this a method in the Region base class
+# so that all regions can be converted into CmpRegions
+
+AstCmpRegion *
+astCmpRegion( region1, region2, oper, options )
+  AstRegion * region1
+  AstRegion * region2
+  int oper
+  char * options
+ CODE:
+#ifndef HASREGION
+   Perl_croak(aTHX_ "astCmpRegion: Please upgrade to AST V3.5 or greater");
+#else
+   ASTCALL(
+     RETVAL = astCmpRegion( region1, region2, oper, options);
+  )
+  if ( RETVAL == AST__NULL ) XSRETURN_UNDEF;
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__AND()
+ CODE:
+#ifdef AST__AND
+    RETVAL = AST__AND;
+#else
+    Perl_croak(aTHX_ "Constant AST__AND not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+int
+AST__OR()
+ CODE:
+#ifdef AST__OR
+    RETVAL = AST__OR;
+#else
+    Perl_croak(aTHX_ "Constant AST__OR not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
+
+
+
 MODULE = Starlink::AST   PACKAGE = Starlink::AST::Circle
 
 AstCircle *
-new( frame, form, centre, point, unc, options )
+new( class, frame, form, centre, point, unc, options )
+  char * class
   AstFrame * frame
   int form
   AV * centre
@@ -3466,7 +3695,7 @@ astMark(this, type, ...)
  PREINIT:
   double * cin;
   int ncoords;
-  int nmarks;
+  int nmarks = 0;
   int indim;
   int size;
   int i;
@@ -3550,7 +3779,7 @@ astPolyCurve(this, ...)
  PREINIT:
   double * cin;
   int ncoords;
-  int npoints;
+  int npoints = 0;
   int indim;
   int size;
   int i;
