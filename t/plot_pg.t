@@ -10,34 +10,34 @@ require_ok( "Starlink::AST::PGPLOT" );
 use File::Spec;
 
 BEGIN {
- 
+
  eval { require PGPLOT; PGPLOT::pgbegin(0,"/xw",1,1) };
  if ( $@ ) {
    plan skip_all => "PGPLOT module not installed.";
    exit;
- } 
- 
+ }
+
  eval "use Astro::FITS::CFITSIO;";
  if ( $@ ) {
    plan skip_all => "Astro::FITS::CFITSIO not installed.";
    exit;
  }
- 
+
  eval "use Astro::FITS::Header::CFITSIO;";
  if ( $@ ) {
    plan skip_all => "Astro::FITS::Header::CFITSIO not installed.";
    exit;
  }
- 
- plan tests => 5;  
- 
+
+ plan tests => 5;
+
 };
 
 Starlink::AST::Begin();
 
 # FITS File
 # ---------
-my $file = File::Spec->catfile( File::Spec->updir(), "data", "m31.fit" );
+my $file = File::Spec->catfile( "data", "m31.fit" );
 
 # Get FITS Header
 # ---------------
@@ -60,8 +60,8 @@ isa_ok( $wcsinfo, "Starlink::AST::FrameSet" );
 # -------------
 my $nx = $header->value("NAXIS1");
 my $ny = $header->value("NAXIS2");
-pgpage();
-pgwnad( 0,1,0,1 );
+PGPLOT::pgpage();
+PGPLOT::pgwnad( 0,1,0,1 );
 
 my ( $x1, $x2, $y1, $y2 ) = (0,1,0,1);
 
@@ -73,11 +73,11 @@ my $xright  = 0.5 * ( $x1 + $x2 + $nx * $scale );
 my $ybottom = 0.5 * ( $y1 + $y2 - $ny * $scale );
 my $ytop    = 0.5 * ( $y1 + $y2 + $ny * $scale );
 
-# Read data 
+# Read data
 # ---------
 my $array = read_file( $file );
-         
-pggray( $array, $nx, $ny, 1, $nx, 1, $ny, 10000, 0, 
+
+PGPLOT::pggray( $array, $nx, $ny, 1, $nx, 1, $ny, 10000, 0,
   [ $xleft-0.5*$scale, $scale, 0.0, $ybottom-0.5*$scale, 0.0, $scale ] );
 
 # Change FrameSet
@@ -86,7 +86,7 @@ pggray( $array, $nx, $ny, 1, $nx, 1, $ny, 10000, 0,
 
 # AST axes
 # --------
-my $plot = Starlink::AST::Plot->new( $wcsinfo, 
+my $plot = Starlink::AST::Plot->new( $wcsinfo,
    [$xleft,$ybottom,$xright,$ytop],[0.5,0.5, $nx+0.5, $ny+0.5], "Grid=1");
 isa_ok( $plot, "Starlink::AST::Plot" );
 
@@ -134,8 +134,8 @@ sub read_file {
              $file, Astro::FITS::CFITSIO::READONLY(), $status);
 
    my ($array, $nullarray, $anynull);
-   $fptr->read_pixnull( 
-     Astro::FITS::CFITSIO::TLONG(), [1,1], $nx*$ny, $array, $nullarray, 
+   $fptr->read_pixnull(
+     Astro::FITS::CFITSIO::TLONG(), [1,1], $nx*$ny, $array, $nullarray,
      $anynull ,$status);
    $fptr->close_file($status);
 

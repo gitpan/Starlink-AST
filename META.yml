@@ -1,21 +1,185 @@
---- #YAML:1.0
-name:               Starlink-AST
-version:            0.99
-abstract:           Interface to the Starlink AST library
+---
+abstract: 'Interface to the Starlink AST library'
 author:
-    - Tim Jenness <tjenness@cpan.org>
-license:            unknown
-distribution_type:  module
-configure_requires:
-    ExtUtils::MakeMaker:  0
+  - 'Tim Jenness E<lt>tjenness@cpan.orgE<gt>'
 build_requires:
-    ExtUtils::MakeMaker:  0
-requires:  {}
-no_index:
-    directory:
-        - t
-        - inc
-generated_by:       ExtUtils::MakeMaker version 6.56
+  ExtUtils::CBuilder: 0
+  Test::More: 0
+configure_requires:
+  Module::Build: 0.3604
+dynamic_config: 1
+generated_by: 'Module::Build version 0.4, CPAN::Meta::Converter version 2.120351'
+license: open_source
 meta-spec:
-    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
-    version:  1.4
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Starlink-AST
+provides:
+  Starlink::AST:
+    file: lib/Starlink/AST.pm
+    version: 1.01
+  Starlink::AST::Axis:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Box:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Channel:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Circle:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::CmpFrame:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::CmpMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::CmpRegion:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::DSBSpecFrame:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::DssMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Ellipse:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::FitsChan:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::FluxFrame:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Frame:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::FrameSet:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::GrismMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Interval:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::IntraMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::KeyMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::KeyMap::Tie:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::LutMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Mapping:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::MathMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::MatrixMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::NullRegion:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::PGPLOT:
+    file: lib/Starlink/AST/PGPLOT.pm
+    version: 2.00
+  Starlink::AST::PLplot:
+    file: lib/Starlink/AST/PLplot.pm
+    version: 2.00
+  Starlink::AST::PcdMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::PermMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Plot:
+    file: lib/Starlink/AST/Tk.pm
+    version: 0
+  Starlink::AST::PolyMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Polygon:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Prism:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::RateMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Region:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::ShiftMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::SkyAxis:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::SkyFrame:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::SlaMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::SpecFluxFrame:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::SpecFrame:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::SpecMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::SphMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Status:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::StcsChan:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::TimeFrame:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::TimeMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::Tk:
+    file: lib/Starlink/AST/Tk.pm
+    version: 2.00
+  Starlink::AST::UnitMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::WcsMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::WinMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::XmlChan:
+    file: lib/Starlink/AST.pm
+    version: 0
+  Starlink::AST::ZoomMap:
+    file: lib/Starlink/AST.pm
+    version: 0
+recommends:
+  Astro::FITS::CFITSIO: 0
+  Astro::FITS::Header: 0
+  Tk: 0
+  Tk::Zinc: 0
+resources:
+  license: http://opensource.org/licenses/gpl-license.php
+  repository: git://starlink.jach.hawaii.edu/perl-Starlink-AST.git
+version: 1.01

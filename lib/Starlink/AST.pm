@@ -10,7 +10,7 @@ require DynaLoader;
 use base qw| DynaLoader |;
 
 
-$VERSION = '0.99';
+$VERSION = '1.01';
 
 bootstrap Starlink::AST $VERSION;
 
@@ -34,6 +34,12 @@ Starlink::AST - Interface to the Starlink AST library
   $fchan->Clear( "Card" );
 
   $wcs = $fchan->Read();
+
+  tie %hash, "Starlink::AST::KeyMap";
+  $hash{KEYWORD} = $value;
+
+  $km = Starlink::AST::KeyMap->new( "" );
+  tie %hash, $km;
 
 =head1 DESCRIPTION
 
@@ -61,7 +67,7 @@ namespace.
 =head2 Constructors
 
 The following constructors are available. Currently, these
-constructors match the C constructors fairly closely. 
+constructors match the C constructors fairly closely.
 
 This is one area which may change when the class comes out of alpha
 release. The main problem with the constructors is the options string
@@ -114,6 +120,10 @@ Same calling signature as C<Starlink::AST::Channel>.
 Same calling signature as C<Starlink::AST::Channel>. Note that xmlChan
 is only available for AST v3.1 and newer.
 
+=item B<Starlink::AST::StcsChan>
+
+A C<Starlink::AST::Channel> using IVOA STC-S descriptions.
+
 =item B<Starlink::AST::GrisMap>
 
 Only available in AST v3.0 and newer.
@@ -164,7 +174,7 @@ The AST library can be downloaded from http://www.starlink.ac.uk/ast
 
 Tim Jenness E<lt>tjenness@cpan.orgE<gt>
 
-Copyright (C) 2004-2005 Tim Jenness. All Rights Reserved.
+Copyright (C) 2004-2011 Tim Jenness. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -225,6 +235,9 @@ use base qw/ Starlink::AST::Channel /;
 package Starlink::AST::XmlChan;
 use base qw/ Starlink::AST::Channel /;
 
+package Starlink::AST::StcsChan;
+use base qw/ Starlink::AST::Channel /;
+
 # Exception handling
 
 package Starlink::AST::Status;
@@ -253,9 +266,9 @@ package Starlink::AST;
 # is much more Perl like than would otherwise be the case.
 sub Set {
   my $self = shift;
-  
-  # Original code, using the lower lever _Set method. Provide the sprintf 
-  # functionality in the Perl side since it is easier than doing it in C 
+
+  # Original code, using the lower lever _Set method. Provide the sprintf
+  # functionality in the Perl side since it is easier than doing it in C
   # [but causes a problem if the string includes a comma]
   #
   #my $string = shift;
@@ -264,29 +277,29 @@ sub Set {
   #
   #$string = sprintf($string, @_) if @_;
   #return $self->_Set( $string );
-  
+
   if ( $_[0] =~ "=" ) {
      $self->_Set( $_[0] );
   } else {
      my %hash = @_;
      foreach my $key ( sort keys %hash ) {
         $self->SetC( $key, $hash{$key} );
-     }   
+     }
   }
   return;
-  
+
 }
 
 sub Get {
   my $self = shift;
   my @strings = @_;
-  
+
   my %hash;
   foreach my $i ( 0 ... $#strings ) {
      $hash{$strings[$i]} = $self->GetC( $strings[$i] );
-  }  
+  }
   return wantarray ? %hash : $hash{$strings[0]};
-    
+
 }
 
 # Rebless cloned/copied object into the original class
@@ -374,11 +387,15 @@ use base qw/ Starlink::AST::Channel /;
 package Starlink::AST::XmlChan;
 use base qw/ Starlink::AST::Channel /;
 
-# Not clear why we need this class in the Perl API since we can
-# just use a perl hash
+package Starlink::AST::StcsChan;
+use base  qw/ Starlink::AST::Channel /;
+
+# Make this available for completeness and provide
+# a tie interface. Useful when transferring content via
+# a text file.
 package Starlink::AST::KeyMap;
 use base qw/ Starlink::AST /;
-
+use Carp;
 # Need to convert the returned object(s) into a real object(s)
 
 sub MapGet0A {
@@ -393,6 +410,287 @@ sub MapGet1A {
   my @obj = $self->_MapGet1A( $_[0] );
   return map { $_->_rebless() } @obj;
 }
+
+# Tie infrastructure
+# The TIEHASH method is in the KeyMap class but all the
+# other methods are in the Tie subclass and the object
+# returned for the tie is not in KeyMap but KeyMap::Tie
+# We can get the object from the first argument
+# but we create a new object for local state.
+
+# tie %km, $obj;
+# tie %km, "Starlink::AST::KeyMap", $obj;
+# tie %km, "Starlink::AST::KeyMap";
+
+# First scheme takes priority.
+
+sub TIEHASH {
+  my $class = shift;
+  my $obj = shift;
+  $obj = $class if ref($class);
+
+  if (!defined $obj) {
+    # we had a class (otherwise we would not be here)
+    $obj = $class->new( "" );
+  }
+
+  if ($obj->isa( "Starlink::AST::KeyMap" )) {
+    return bless { Object => $obj }, "Starlink::AST::KeyMap::Tie";
+  } else {
+    confess("Can only tie a Starlink::AST::KeyMap object");
+  }
+}
+
+package Starlink::AST::KeyMap::Tie;
+
+use Scalar::Util qw/ blessed looks_like_number /;
+use Carp;
+
+# Always use strings
+# This is always a tied hash
+
+sub FETCH {
+  my ($self, $key) = @_;
+  my $km = $self->{Object};
+  if ($km->MapHasKey( $key )) {
+    my $type = $km->MapType( $key );
+    my @results;
+    if ($type == Starlink::AST::KeyMap::AST__UNDEFTYPE()) {
+      return undef;
+    } elsif ($type == Starlink::AST::KeyMap::AST__OBJECTTYPE() ) {
+      # object
+      my @local = $km->MapGet1A( $key );
+      for my $r (@local) {
+        # convert to tied hash as needed
+        if ($r->isa( "Starlink::AST::KeyMap" )) {
+          my %newtie;
+          tie %newtie, $r;
+          push(@results, \%newtie );
+        } else {
+          # retain as native object
+          push(@results, $r );
+        }
+      }
+
+
+    } elsif ($type == Starlink::AST::KeyMap::AST__DOUBLETYPE() ||
+            $type == Starlink::AST::KeyMap::AST__FLOATTYPE() ) {
+      @results = $km->MapGet1D( $key );
+    } elsif ($type == Starlink::AST::KeyMap::AST__INTTYPE() ||
+             $type == Starlink::AST::KeyMap::AST__SINTTYPE() ) {
+      @results = $km->MapGet1I( $key );
+    } elsif ($type == Starlink::AST::KeyMap::AST__STRINGTYPE() ) {
+      @results = $km->MapGet1C( $key );
+    } elsif ($type == Starlink::AST::KeyMap::AST__POINTERTYPE() ) {
+      carp "Can not retrieve a POINTER type from an AST KeyMap";
+    }
+
+    if (@results > 1) {
+      return \@results;
+    } else {
+      return $results[0];
+    }
+  }
+  return;
+}
+
+# Note that hash references are copied into the key map
+# so the reference is not retained.
+
+# We assume arrays are all of the same type
+
+sub STORE {
+  my $self = shift;
+  my $key = shift;
+  my $km = $self->{Object};
+  my $val = shift;
+
+  if (not ref($val) ) {
+    if (defined $val) {
+      if (looks_like_number($val)) {
+        if (int($val) - $val == 0) {
+          my $itype = _intrange( $val );
+          my $method = "MapPut0" . $itype;
+          $km->$method( $key, $val, "Stored by Perl Tie interface [SCALARINT($itype)]" );
+        } else {
+          $km->MapPut0D( $key, $val, "Stored by Perl Tie interface [SCALARDBL]" );
+        }
+      } else {
+        $km->MapPut0C( $key, $val, "Stored by Perl Tie interface [SCALARSTR]" );
+      }
+    } else {
+      $km->MapPutU( $key, "Stored by Perl Tie interface [SCALARUNDEF]" );
+    }
+  } elsif (blessed( $val ) ) {
+    # If it is an AST object we can store it directly
+    if ($val->isa("Starlink::AST")) {
+      $km->MapPut0A( $key, $val, "Stored by Perl Tie interface [ASTOBJ]" );
+    } elsif ($val->isa( "Starlink::AST::KeyMap::Tie" )) {
+      # We store the object in the KeyMap
+      $km->MapPut0A( $key, $val->{Object}, "Stored by Perl Tie interface [TIEOBJ]" );
+    } else {
+      croak "Can not store a non-AST object into a tied AST KeyMap";
+    }
+
+  } elsif (ref($val) eq "HASH") {
+    # If this is a tied hash just get the object
+    my $tied = tied %$val;
+    if (defined $tied && $tied->isa( "Starlink::AST::KeyMap::Tie" ) ) {
+      $km->MapPut0A( $key, $val->{Object}, "Stored by Perl Tie interface [TIEHASH]" );
+    } else {
+      # We need to copy the hash using a tie
+      my %new;
+      my $newkm = Starlink::AST::KeyMap->new( "" );
+      tie %new, $newkm;
+      %new = %$val;
+      $km->MapPut0A( $key, $newkm, "Stored by Perl Tie Interface [HASH]");
+    }
+  } elsif (ref($val) eq "ARRAY" ) {
+
+    if (@$val == 0) {
+      # nothing in the array
+      $km->MapPutU( $key, "Stored by Perl Tie interface [UNDEFARR]" );
+    } else {
+
+      # see if we have numbers or strings
+      # ignore arrays of objects
+      my $has_numbers = 0;
+      my $has_refs = 0;
+      my $has_ast = 0;
+      my $has_strings = 0;
+      my $has_ints = 0;
+      my $has_floats = 0;
+      for my $item (@$val) {
+        if (ref($item)) {
+          if (blessed($item) && $item->isa("Starlink::AST") ) {
+            $has_ast++;
+          } else {
+            $has_refs++;
+          }
+        } elsif (looks_like_number( $item) ) {
+          $has_numbers++;
+          if ( int($item) - $item == 0 ) {
+            $has_ints++;
+          } else {
+            $has_floats++;
+          }
+        } else {
+          $has_strings++;
+        }
+      }
+
+      if ($has_ast == scalar @$val ) { # All AST objects
+        $km->MapPut1A( $key, $val, "Stored by Perl Tie Interface [ASTOBJARR]" );
+      } elsif ($has_refs || $has_ast) {
+        croak "Can not currently store references or objects in a tied AST KeyMap";
+      } elsif ($has_numbers && !$has_strings) {
+        # Store as doubles
+        if ($has_floats == 0) {
+          my $itype = _intrange( @$val );
+          my $method = "MapPut1" . $itype;
+          $km->$method( $key, $val, "Stored by Perl Tie Interface [INTARR($itype)]" );
+        } else {
+          $km->MapPut1D( $key, $val, "Stored by Perl Tie Interface [DBLARR]" );
+        }
+      } elsif ($has_strings) {
+        $km->MapPut1C( $key, $val, "Stored by Perl Tie Interface [STRARR]" );
+      } else {
+        # not really an array
+        $km->MapPutU( $key, "Stored by Perl Tie interface [UNDEFARR]");
+      }
+
+    }
+  } else {
+    croak "Do not know how to store $val into a tied AST KeyMap";
+  }
+
+}
+
+# _intrange determines the type ("I"nt or "S"hort) to use for storing
+# the integers based on range.
+# Currently we do not check for unsigned short or 64-bit int.
+
+sub _intrange {
+  # Default to the smallest size
+  my $type = "S";
+  use constant NUM__MINW => (-32767 - 1);
+  use constant NUM__MAXW => 32767;
+  for my $i (@_) {
+    # SHORT/WORD range is defined in prm_par.h but won't be changing
+    if ($i < NUM__MINW || $i > NUM__MAXW) {
+      $type = "I";
+      last;
+    }
+  }
+  return $type;
+}
+
+sub FIRSTKEY {
+  my $self = shift;
+  my $km = $self->{Object};
+  my $size = $km->MapSize();
+  return undef if $size == 0;
+  my $key = $km->MapKey( 0 );
+  # Reset the index
+  $self->{LastIndex} = 0;
+  return $key;
+}
+
+sub NEXTKEY {
+  my $self = shift;
+  my $km = $self->{Object};
+  my $curindex = $self->{LastIndex} + 1;
+  my $size = $km->MapSize();
+  if ($curindex >= $size) {
+    $self->{LastIndex} = undef;
+    return undef;
+  }
+  $self->{LastIndex} = $curindex;
+  return $km->MapKey( $curindex );
+}
+
+sub EXISTS {
+  my ($self, $key) = @_;
+  my $km = $self->{Object};
+  return $km->MapHasKey( $key );
+}
+
+sub SCALAR {
+  my ($self, $key) = @_;
+  my $km = $self->{Object};
+  return $km->MapSize();
+}
+
+# Technically delete has to return the entry that was deleted
+# It also should delete multiple entries if asked
+# We will be called for each element separately
+
+sub DELETE {
+  my $self = shift;
+  my $key = shift;
+  my $km = $self->{Object};
+  my $retval;
+  if ( $km->MapHasKey( $key ) ) {
+    # Retrieve value in perl land
+    $retval = $self->FETCH( $key );
+    $km->MapRemove( $key );
+  }
+  return $retval;
+}
+
+# Remove all entries
+sub CLEAR {
+  my ($self, $key) = @_;
+  my $km = $self->{Object};
+  my $size = $km->MapSize();
+
+  # Get all the keys and then delete them
+  my @keys = map { $km->MapKey( $_ ) } (0..$size-1);
+  for my $key (@keys) {
+    $km->MapRemove( $key );
+  }
+}
+
 
 package Starlink::AST::Mapping;
 use base qw/ Starlink::AST /;
@@ -499,6 +797,9 @@ use base qw/ Starlink::AST::Region /;
 package Starlink::AST::NullRegion;
 use base qw/ Starlink::AST::Region /;
 
+package Starlink::AST::Prism;
+use base qw/ Starlink::AST::Region /;
+
 package Starlink::AST::FluxFrame;
 use base qw/ Starlink::AST::Frame /;
 
@@ -521,29 +822,29 @@ sub GetFrame {
 sub FindFrameByDomain {
   my $self = shift;
   my $string = shift;
-  
+
   my $frame = undef;
   my $number = $self->Get( 'Nframe' );
-  foreach my $i ( 0 ... $number ) { 
+  foreach my $i ( 0 ... $number ) {
       my $tmp_frame = $self->GetFrame( $i );
       if ( $tmp_frame->Get('Domain') eq $string ) {
          $frame = $tmp_frame;
-      }        
-  } 
-  
+      }
+  }
+
   return $frame;
 }
-  
+
 package Starlink::AST::Plot;
 use base qw/ Starlink::AST::FrameSet /;
 
 sub new {
   my $class = shift;
   my @args = @_;
- 
+
   my $gbox = $args[1];
   my $pbox = $args[2];
-    
+
   # Call the underlying routine
   my $self = $class->_new( @args );
 
@@ -551,7 +852,7 @@ sub new {
   $self->{_xghi} = $$gbox[2] if defined $$gbox[1];
   $self->{_yglo} = $$gbox[1] if defined $$gbox[2];
   $self->{_yghi} = $$gbox[3] if defined $$gbox[3];
-  
+
   $self->{_xplo} = $$pbox[0] if defined $$pbox[0];
   $self->{_xphi} = $$pbox[2] if defined $$pbox[1];
   $self->{_yplo} = $$pbox[1] if defined $$pbox[2];
@@ -562,7 +863,7 @@ sub new {
 
 sub GBox {
   my $self = shift;
-  if( @_ ) { 
+  if( @_ ) {
      my $gbox = shift;
      $self->{_xglo} = $$gbox[0];
      $self->{_xghi} = $$gbox[2];
@@ -574,7 +875,7 @@ sub GBox {
 
 sub PBox {
   my $self = shift;
-  if( @_ ) { 
+  if( @_ ) {
      my $pbox = shift;
      $self->{_xplo} = $$pbox[0];
      $self->{_xphi} = $$pbox[2];
@@ -582,6 +883,18 @@ sub PBox {
      $self->{_yphi} = $$pbox[3];
   }
   return ($self->{_xplo}, $self->{_xphi}, $self->{_yplo}, $self->{_yphi} );
+}
+
+sub GBBuf {
+  my $self = shift;
+  if (@_) { $self->{_gbbuf} = shift; }
+  return $self->{_gbbuf};
+}
+
+sub GEBuf {
+  my $self = shift;
+  if (@_) { $self->{_gebuf} = shift; }
+  return $self->{_gebuf};
 }
 
 sub GFlush {
@@ -650,6 +963,8 @@ sub GExternal {
 
 sub null {
   my $self = shift;
+  $self->GBBuf( undef );
+  $self->GEBuf( undef );
   $self->GFlush( undef );
   $self->GLine( undef );
   $self->GQch( undef );
@@ -671,6 +986,8 @@ sub __dumpargs {
 
 sub debug {
   my $self = shift;
+  $self->GBBuf( sub {&__dumpargs("GBBuf",@_); return 1; });
+  $self->GEBuf( sub {&__dumpargs("GEBuf",@_); return 1; });
   $self->GFlush( sub {&__dumpargs("GFlush",@_); return 1; });
   $self->GLine( sub {&__dumpargs("GLine",@_);   return 1; });
   $self->GQch( sub {&__dumpargs("GQch",@_ );    return (1,1,1); });
