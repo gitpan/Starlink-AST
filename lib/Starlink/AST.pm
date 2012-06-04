@@ -10,7 +10,7 @@ require DynaLoader;
 use base qw| DynaLoader |;
 
 
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 bootstrap Starlink::AST $VERSION;
 
@@ -237,23 +237,6 @@ use base qw/ Starlink::AST::Channel /;
 
 package Starlink::AST::StcsChan;
 use base qw/ Starlink::AST::Channel /;
-
-# Exception handling
-
-package Starlink::AST::Status;
-
-# This is called via the ASTCALL C macro
-# Arguments are : status value and a reference to an array
-# containing the message stack
-
-sub ThrowError {
-  my $status = shift;
-  my $err = shift;
-  my $str = join("\n",map { "- $_" } @$err) . "\n";
-  # This should throw an appropriate exception
-  # for now just croak
-  Carp::croak( $str );
-}
 
 # All the inheritance stuff
 

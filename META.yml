@@ -4,7 +4,9 @@ author:
   - 'Tim Jenness E<lt>tjenness@cpan.orgE<gt>'
 build_requires:
   ExtUtils::CBuilder: 0
+  Test::Deep: 0
   Test::More: 0
+  Test::Number::Delta: 0
 configure_requires:
   Module::Build: 0.3604
 dynamic_config: 1
@@ -17,7 +19,7 @@ name: Starlink-AST
 provides:
   Starlink::AST:
     file: lib/Starlink/AST.pm
-    version: 1.01
+    version: 1.02
   Starlink::AST::Axis:
     file: lib/Starlink/AST.pm
     version: 0
@@ -144,9 +146,6 @@ provides:
   Starlink::AST::SphMap:
     file: lib/Starlink/AST.pm
     version: 0
-  Starlink::AST::Status:
-    file: lib/Starlink/AST.pm
-    version: 0
   Starlink::AST::StcsChan:
     file: lib/Starlink/AST.pm
     version: 0
@@ -182,4 +181,4 @@ recommends:
 resources:
   license: http://opensource.org/licenses/gpl-license.php
   repository: git://starlink.jach.hawaii.edu/perl-Starlink-AST.git
-version: 1.01
+version: 1.02
