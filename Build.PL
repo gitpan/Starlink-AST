@@ -12,6 +12,13 @@ if ($^O eq 'darwin') {
   $linkflags = "-exported_symbols_list exported_symbols.lis";
 }
 
+# On MSWin32 we are getting test failures indicating that sscanf
+# is not working. Experiment with using the internal sscanf implementation.
+my @defines;
+if ($^O eq 'MSWin32') {
+  push(@defines, "-DHAVE_NONANSI_SSCANF=1");
+}
+
 my $file = File::Spec->catfile( "lib", "Starlink", "AST.pm" );
 
 my $build = Module::Build->new
@@ -35,6 +42,7 @@ my $build = Module::Build->new
                   "Astro::FITS::Header" => 0,
                  },
    build_requires => {
+                      "perl" => 5.008,
                       "Test::More" => 0,
                       "Test::Deep" => 0,
                       "Test::Number::Delta" => 0,
@@ -47,6 +55,7 @@ my $build = Module::Build->new
                              "-DHAVE_DECL_ISNAN=1", # Assume we have NaN
                              "-DSIZEOF_LONG=". $Config{longsize},
                              "-DSIZEOF_LONG_LONG=". $Config{longlongsize},
+                             @defines,
                            ],
    extra_linker_flags => $linkflags,
   );

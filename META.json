@@ -4,7 +4,7 @@
       "Tim Jenness E<lt>tjenness@cpan.orgE<gt>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.4, CPAN::Meta::Converter version 2.120351",
+   "generated_by" : "Module::Build version 0.4007, CPAN::Meta::Converter version 2.120630",
    "license" : [
       "open_source"
    ],
@@ -19,7 +19,8 @@
             "ExtUtils::CBuilder" : "0",
             "Test::Deep" : "0",
             "Test::More" : "0",
-            "Test::Number::Delta" : "0"
+            "Test::Number::Delta" : "0",
+            "perl" : "5.008"
          }
       },
       "configure" : {
@@ -39,7 +40,7 @@
    "provides" : {
       "Starlink::AST" : {
          "file" : "lib/Starlink/AST.pm",
-         "version" : "1.02"
+         "version" : "1.03"
       },
       "Starlink::AST::Axis" : {
          "file" : "lib/Starlink/AST.pm",
@@ -249,11 +250,11 @@
    "release_status" : "stable",
    "resources" : {
       "license" : [
-         "http://opensource.org/licenses/gpl-license.php"
+         "http://www.gnu.org/licenses/old-licenses/gpl-1.0.txt"
       ],
       "repository" : {
          "url" : "git://starlink.jach.hawaii.edu/perl-Starlink-AST.git"
       }
    },
-   "version" : "1.02"
+   "version" : "1.03"
 }

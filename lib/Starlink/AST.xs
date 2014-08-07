@@ -163,6 +163,11 @@ typedef void AstTimeMap;
 #else
 #endif
 
+#if ( (AST_MAJOR_VERS == 7 && AST_MINOR_VERS >= 2) || AST_MAJOR_VERS >= 8 )
+#define HASMAPDEFINED
+#else
+#endif
+
 
 /* Helper functions */
 #include "arrays.h"
@@ -242,7 +247,7 @@ void astThrowException ( int status, AV* errorstack ) {
       if (i != nelem) sv_catpv( errsv, "\n");
     }
   }
-  croak( SvPV_nolen( errsv ) );
+  Perl_croak( aTHX_ "%s", SvPV_nolen( errsv ) );
 }
 
 /* Callbacks */
@@ -285,7 +290,7 @@ static char *sourceWrap( const char *(*source)(), int *status ) {
   PUSHMARK(sp);
   PUTBACK;
 
-  count = perl_call_sv( cb, G_NOARGS | G_SCALAR | G_EVAL );
+  count = call_sv( cb, G_NOARGS | G_SCALAR | G_EVAL );
 
   ReportPerlError( AST__INTER );
 
@@ -346,7 +351,7 @@ static void sinkWrap( void (*sink)(const char *), const char *line, int *status 
   XPUSHs( sv_2mortal( newSVpv( (char*)line, strlen(line) )));
   PUTBACK;
 
-  perl_call_sv( SvRV(cb), G_DISCARD | G_VOID | G_EVAL );
+  call_sv( SvRV(cb), G_DISCARD | G_VOID | G_EVAL );
 
   ReportPerlError( AST__INTER );
 
@@ -526,7 +531,16 @@ AST__BASE()
  OUTPUT:
   RETVAL
 
-
+int
+AST__ALLFRAMES()
+ CODE:
+#ifdef AST__ALLFRAMES
+    RETVAL = AST__ALLFRAMES;
+#else
+    Perl_croak(aTHX_ "Constant AST__ALLFRAMES not defined\n");
+#endif
+ OUTPUT:
+  RETVAL
 
 MODULE = Starlink::AST     PACKAGE = Starlink::AST PREFIX = ast
 
@@ -603,7 +617,7 @@ ast_Error( status, message)
   StatusType status
   char * message
  CODE:
-  astError( status, message);
+  astError( status, "%s", message);
 
 
 # Call only from within an AST callback
@@ -793,7 +807,7 @@ _new( class, sourcefunc, sinkfunc, options )
       /* Store reference to object */
       sink = rv;
       /* and store the actual sink callback in the object */
-      setPerlObjectAttr( RETVAL, "_sink", newRV( SvRV(sinkfunc) ));
+      setPerlObjectAttr( RETVAL, "_sink", newRV_inc( SvRV(sinkfunc) ));
     }
 
     /* In some cases the source routine is called after this constructor
@@ -803,7 +817,7 @@ _new( class, sourcefunc, sinkfunc, options )
       /* Store reference to object */
       source = rv;
       /* and store the actual sink callback in the object */
-      setPerlObjectAttr( RETVAL, "_source", newRV( SvRV(sourcefunc) ));
+      setPerlObjectAttr( RETVAL, "_source", newRV_inc( SvRV(sourcefunc) ));
     }
 
   }
@@ -1349,7 +1363,7 @@ astAnnul( this )
   SV* arg = ST(0);
  CODE:
   ASTCALL(
-   astAnnul( this );
+   this = astAnnul( this );
   )
   setPerlObjectAttr( arg, "_annul",newSViv(1));
 
@@ -1376,12 +1390,14 @@ ast_Copy( this )
  OUTPUT:
   RETVAL
 
+# Note that we do not return a NULL object
+
 void
 astDelete( this )
   AstObject * this
  CODE:
   ASTCALL(
-   astDelete( this );
+   this = astDelete( this );
   )
 
 void
@@ -1587,7 +1603,7 @@ astDESTROY( obj )
     MUTEX_LOCK(&AST_mutex);
     My_astClearErrMsg();
     old_ast_status = astWatch( my_xsstatus );
-    astAnnul( this );
+    this = astAnnul( this );
     astWatch( old_ast_status );
     My_astCopyErrMsg( &local_err, *my_xsstatus );
     MUTEX_UNLOCK(&AST_mutex);
@@ -1872,8 +1888,8 @@ astMapPut1S( this, key, values, comment)
         }
         ival = SvIV(*element);
         if (ival < SHRT_MIN || ival > SHRT_MAX) {
-          Perl_croak( aTHX_ "MapPut1S: Value of element %d (%d) is out of range for a short",
-                      i, ival );
+          Perl_croak( aTHX_ "MapPut1S: Value of element %d (%ld) is out of range for a short",
+                      i, (long)ival );
         }
      }
   }
@@ -2260,6 +2276,21 @@ astMapType( this, key )
 #else
   ASTCALL(
    RETVAL = astMapType( this, key );
+  )
+#endif
+ OUTPUT:
+  RETVAL
+
+bool
+astMapDefined( this, key )
+  AstKeyMap * this
+  char * key
+ CODE:
+#ifndef HASMAPDEFINED
+  Perl_croak(aTHX_ "astMapDefined: Please upgrade to AST V7.2 or newer");
+#else
+  ASTCALL(
+   RETVAL = astMapDefined( this, key );
   )
 #endif
  OUTPUT:
