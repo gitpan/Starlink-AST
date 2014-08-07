@@ -10,7 +10,7 @@ require DynaLoader;
 use base qw| DynaLoader |;
 
 
-$VERSION = '1.03';
+$VERSION = '1.04';
 
 bootstrap Starlink::AST $VERSION;
 
@@ -174,7 +174,7 @@ The AST library can be downloaded from http://www.starlink.ac.uk/ast
 
 Tim Jenness E<lt>tjenness@cpan.orgE<gt>
 
-Copyright (C) 2004-2011 Tim Jenness. All Rights Reserved.
+Copyright (C) 2004-2012, 2014 Tim Jenness. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -190,53 +190,6 @@ this program; if not, write to the Free Software Foundation, Inc., 59 Temple
 Place,Suite 330, Boston, MA  02111-1307, USA
 
 =cut
-
-# Channels need a wrapper
-
-package Starlink::AST::Channel;
-
-sub new {
-  # This should work for FitsChan and Channel and XmlChan
-  my $class = shift;
-  my %args = @_;
-  my ($sink, $source);
-
-  # sink and source are special. All others are attributes
-
-  # Stuff the callbacks in the object [if we were paranoid we would provide
-  # methods to obtain the attribute keys]
-  if (exists $args{sink} ) {
-    $sink = $args{sink};
-    delete $args{sink};
-  }
-  if (exists $args{source} ) {
-    $source = $args{source};
-    delete $args{source};
-  }
-
-  # Convert all remaining options to comma separated string
-  my @options;
-  for my $k (keys %args ) {
-    push(@options, "$k=$args{$k}");
-  }
-  my $options = "";
-  $options = join(",",@options) if @options;
-
-  # Call the underlying routine
-  # Pass in sink and source functions. Can be undef.
-  my $self = $class->_new( $source, $sink, $options );
-
-  return $self;
-}
-
-package Starlink::AST::FitsChan;
-use base qw/ Starlink::AST::Channel /;
-
-package Starlink::AST::XmlChan;
-use base qw/ Starlink::AST::Channel /;
-
-package Starlink::AST::StcsChan;
-use base qw/ Starlink::AST::Channel /;
 
 # All the inheritance stuff
 
@@ -345,12 +298,51 @@ sub STORABLE_thaw {
 
 package Starlink::AST::Axis;
 use base qw/ Starlink::AST /;
+our $VERSION = '1.00';
 
 package Starlink::AST::SkyAxis;
 use base qw/ Starlink::AST::Axis /;
+our $VERSION = '1.00';
+
+# Channels need a wrapper
 
 package Starlink::AST::Channel;
 use base qw/ Starlink::AST  /;
+our $VERSION = '1.00';
+
+sub new {
+  # This should work for FitsChan and Channel and XmlChan
+  my $class = shift;
+  my %args = @_;
+  my ($sink, $source);
+
+  # sink and source are special. All others are attributes
+
+  # Stuff the callbacks in the object [if we were paranoid we would provide
+  # methods to obtain the attribute keys]
+  if (exists $args{sink} ) {
+    $sink = $args{sink};
+    delete $args{sink};
+  }
+  if (exists $args{source} ) {
+    $source = $args{source};
+    delete $args{source};
+  }
+
+  # Convert all remaining options to comma separated string
+  my @options;
+  for my $k (keys %args ) {
+    push(@options, "$k=$args{$k}");
+  }
+  my $options = "";
+  $options = join(",",@options) if @options;
+
+  # Call the underlying routine
+  # Pass in sink and source functions. Can be undef.
+  my $self = $class->_new( $source, $sink, $options );
+
+  return $self;
+}
 
 # Need to rebless objects obtained from an astRead into the
 # correct class rather than generic variant.
@@ -366,18 +358,22 @@ sub Read {
 
 package Starlink::AST::FitsChan;
 use base qw/ Starlink::AST::Channel /;
+our $VERSION = '1.00';
 
 package Starlink::AST::XmlChan;
 use base qw/ Starlink::AST::Channel /;
+our $VERSION = '1.00';
 
 package Starlink::AST::StcsChan;
 use base  qw/ Starlink::AST::Channel /;
+our $VERSION = '1.00';
 
 # Make this available for completeness and provide
 # a tie interface. Useful when transferring content via
 # a text file.
 package Starlink::AST::KeyMap;
 use base qw/ Starlink::AST /;
+our $VERSION = '1.00';
 use Carp;
 # Need to convert the returned object(s) into a real object(s)
 
@@ -425,6 +421,7 @@ sub TIEHASH {
 }
 
 package Starlink::AST::KeyMap::Tie;
+our $VERSION = '1.00';
 
 use Scalar::Util qw/ blessed looks_like_number /;
 use Carp;
@@ -677,69 +674,91 @@ sub CLEAR {
 
 package Starlink::AST::Mapping;
 use base qw/ Starlink::AST /;
+our $VERSION = '1.00';
 
 package Starlink::AST::CmpMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::DssMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::LutMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::GrismMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::IntraMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::MathMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::MatrixMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::PcdMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::PermMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::PolyMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::RateMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::ShiftMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::SlaMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::SphMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::SpecMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::UnitMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::WcsMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::WinMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::ZoomMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::TimeMap;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 package Starlink::AST::Frame;
 use base qw/ Starlink::AST::Mapping /;
+our $VERSION = '1.00';
 
 # Wrapper for PickAxes
 # Uses context to decide whether to return the frame mapping or not
@@ -758,36 +777,47 @@ sub PickAxes {
 
 package Starlink::AST::Region;
 use base qw/ Starlink::AST::Frame /;
+our $VERSION = '1.00';
 
 package Starlink::AST::Circle;
 use base qw/ Starlink::AST::Region /;
+our $VERSION = '1.00';
 
 package Starlink::AST::Polygon;
 use base qw/ Starlink::AST::Region /;
+our $VERSION = '1.00';
 
 package Starlink::AST::Ellipse;
 use base qw/ Starlink::AST::Region /;
+our $VERSION = '1.00';
 
 package Starlink::AST::Box;
 use base qw/ Starlink::AST::Region /;
+our $VERSION = '1.00';
 
 package Starlink::AST::Interval;
 use base qw/ Starlink::AST::Region /;
+our $VERSION = '1.00';
 
 package Starlink::AST::CmpRegion;
 use base qw/ Starlink::AST::Region /;
+our $VERSION = '1.00';
 
 package Starlink::AST::NullRegion;
 use base qw/ Starlink::AST::Region /;
+our $VERSION = '1.00';
 
 package Starlink::AST::Prism;
 use base qw/ Starlink::AST::Region /;
+our $VERSION = '1.00';
 
 package Starlink::AST::FluxFrame;
 use base qw/ Starlink::AST::Frame /;
+our $VERSION = '1.00';
 
 package Starlink::AST::FrameSet;
 use base qw/ Starlink::AST::Frame /;
+our $VERSION = '1.00';
 
 # Convert to proper class
 
@@ -820,6 +850,7 @@ sub FindFrameByDomain {
 
 package Starlink::AST::Plot;
 use base qw/ Starlink::AST::FrameSet /;
+our $VERSION = '1.00';
 
 sub new {
   my $class = shift;
@@ -986,20 +1017,26 @@ sub debug {
 
 package Starlink::AST::CmpFrame;
 use base qw/ Starlink::AST::Frame /;
+our $VERSION = '1.00';
 
 package Starlink::AST::SkyFrame;
 use base qw/ Starlink::AST::Frame /;
+our $VERSION = '1.00';
 
 package Starlink::AST::SpecFrame;
 use base qw/ Starlink::AST::Frame /;
+our $VERSION = '1.00';
 
 package Starlink::AST::DSBSpecFrame;
 use base qw/ Starlink::AST::SpecFrame /;
+our $VERSION = '1.00';
 
 package Starlink::AST::SpecFluxFrame;
 use base qw/ Starlink::AST::CmpFrame /;
+our $VERSION = '1.00';
 
 package Starlink::AST::TimeFrame;
 use base qw/ Starlink::AST::Frame /;
+our $VERSION = '1.00';
 
 1;
