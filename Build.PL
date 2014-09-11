@@ -16,7 +16,8 @@ if ($^O eq 'darwin') {
 # is not working. Experiment with using the internal sscanf implementation.
 my @defines;
 if ($^O eq 'MSWin32') {
-  push(@defines, "-DHAVE_NONANSI_SSCANF=1");
+  push(@defines, "-DHAVE_NONANSI_SSCANF=1",
+                 "-Dcminpack_EXPORTS");
 }
 
 my $file = File::Spec->catfile( "lib", "Starlink", "AST.pm" );
@@ -24,7 +25,7 @@ my $file = File::Spec->catfile( "lib", "Starlink", "AST.pm" );
 my $build = Module::Build->new
   (
    module_name => "Starlink::AST",
-   license => "GPL_2",
+   license => "gpl_2",
    author => [
               'Tim Jenness <tjenness@cpan.org>',
              ],

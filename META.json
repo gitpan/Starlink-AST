@@ -4,7 +4,7 @@
       "Tim Jenness E<lt>tjenness@cpan.orgE<gt>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.4206",
+   "generated_by" : "Module::Build version 0.421",
    "license" : [
       "gpl_2"
    ],
@@ -40,7 +40,7 @@
    "provides" : {
       "Starlink::AST" : {
          "file" : "lib/Starlink/AST.pm",
-         "version" : "1.04"
+         "version" : "1.05"
       },
       "Starlink::AST::Axis" : {
          "file" : "lib/Starlink/AST.pm",
@@ -249,12 +249,9 @@
    },
    "release_status" : "stable",
    "resources" : {
-      "license" : [
-         "http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt"
-      ],
       "repository" : {
          "url" : "https://github.com/Starlink/perl-Starlink-AST.git"
       }
    },
-   "version" : "1.04"
+   "version" : "1.05"
 }
